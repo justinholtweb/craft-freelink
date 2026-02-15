@@ -169,10 +169,10 @@ class FreeLinkField extends Field implements EagerLoadingFieldInterface
 
         // Single-link mode: store as object, not array
         if (!$this->multipleLinks && count($serialized) === 1) {
-            return Json::encode($serialized[0]);
+            return $serialized[0];
         }
 
-        return Json::encode($serialized);
+        return $serialized;
     }
 
     // endregion

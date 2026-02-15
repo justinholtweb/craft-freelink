@@ -6,6 +6,7 @@ use ArrayAccess;
 use Countable;
 use IteratorAggregate;
 use ArrayIterator;
+use JsonSerializable;
 use Stringable;
 use justinholtweb\freelink\base\Link;
 use Twig\Markup;
@@ -17,7 +18,7 @@ use Twig\Markup;
  * magic methods delegate to the first link. In multi-link mode,
  * the collection is iterable.
  */
-class LinkCollection implements IteratorAggregate, Countable, ArrayAccess, Stringable
+class LinkCollection implements IteratorAggregate, Countable, ArrayAccess, Stringable, JsonSerializable
 {
     /** @var Link[] */
     private array $links;
@@ -221,6 +222,15 @@ class LinkCollection implements IteratorAggregate, Countable, ArrayAccess, Strin
     {
         unset($this->links[$offset]);
         $this->links = array_values($this->links);
+    }
+
+    // endregion
+
+    // region JsonSerializable
+
+    public function jsonSerialize(): mixed
+    {
+        return array_map(fn(Link $link) => $link->toApiArray(), $this->links);
     }
 
     // endregion

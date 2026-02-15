@@ -133,4 +133,20 @@ class ElementLink extends Link
 
         return $data;
     }
+
+    public function toApiArray(): array
+    {
+        $data = parent::toApiArray();
+
+        $element = $this->getElement();
+
+        $data['elementId'] = $this->targetId;
+        $data['elementSiteId'] = $this->targetSiteId;
+        $data['elementType'] = static::elementType();
+        $data['elementTitle'] = $element?->title;
+        $data['elementUrl'] = $element?->getUrl();
+        $data['elementStatus'] = $element?->getStatus();
+
+        return $data;
+    }
 }

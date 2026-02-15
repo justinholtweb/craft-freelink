@@ -6,13 +6,14 @@ use Craft;
 use craft\helpers\Html;
 use craft\helpers\Template;
 use Twig\Markup;
+use JsonSerializable;
 use yii\base\Model;
 
 /**
  * Base link model. All link types extend this class.
  * Extends yii\base\Model (NOT Craft's Element class) for lightweight operation.
  */
-class Link extends Model
+class Link extends Model implements JsonSerializable
 {
     public string $type = '';
     public ?string $value = null;
@@ -221,6 +222,38 @@ class Link extends Model
             'customAttributes' => $this->customAttributes,
         ];
     }
+
+    // region API serialization
+
+    /**
+     * Returns resolved values for API/JSON output (Element API, json_encode).
+     * Distinct from toArray() which returns raw storage data.
+     */
+    public function toApiArray(): array
+    {
+        return [
+            'type' => $this->type,
+            'url' => $this->getUrl(),
+            'text' => $this->getText(),
+            'target' => $this->getTarget(),
+            'newWindow' => $this->newWindow,
+            'label' => $this->label,
+            'ariaLabel' => $this->ariaLabel,
+            'title' => $this->title,
+            'classes' => $this->classes,
+            'id' => $this->id,
+            'rel' => $this->rel,
+            'isEmpty' => $this->isEmpty(),
+            'isElement' => $this->isElement(),
+        ];
+    }
+
+    public function jsonSerialize(): mixed
+    {
+        return $this->toApiArray();
+    }
+
+    // endregion
 
     public function __toString(): string
     {
