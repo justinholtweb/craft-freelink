@@ -1,0 +1,148 @@
+{# Field settings template for FreeLink #}
+
+{% import '_includes/forms' as forms %}
+
+<hr>
+
+<h2>{{ 'Link Types'|t('freelink') }}</h2>
+
+<p class="light">{{ 'Select which link types are available for this field.'|t('freelink') }}</p>
+
+<div id="freelink-type-settings">
+    {% for typeOpt in typeOptions %}
+        <div class="field" style="margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                {{ forms.lightswitchField({
+                    name: 'linkTypes[' ~ typeOpt.handle ~ '][enabled]',
+                    on: typeOpt.enabled,
+                    label: typeOpt.label,
+                    small: true,
+                }) }}
+
+                <input type="hidden"
+                       name="linkTypes[{{ typeOpt.handle }}][sortOrder]"
+                       value="{{ loop.index0 }}">
+
+                {% if typeOpt.isElement %}
+                    <span class="light" style="font-size: 11px;">({{ 'Element'|t('freelink') }})</span>
+                {% endif %}
+            </div>
+
+            {# Custom label override #}
+            <div style="margin-left: 58px; margin-top: 4px;">
+                <input type="text"
+                       class="text"
+                       name="linkTypes[{{ typeOpt.handle }}][label]"
+                       value="{{ typeOpt.customLabel }}"
+                       placeholder="{{ typeOpt.label }}"
+                       style="width: 200px; font-size: 12px;"
+                       title="{{ 'Custom label (optional)'|t('freelink') }}">
+
+                {% if typeOpt.isElement %}
+                    <input type="hidden"
+                           name="linkTypes[{{ typeOpt.handle }}][sources]"
+                           value="{{ typeOpt.sources is iterable ? typeOpt.sources|join(',') : typeOpt.sources }}">
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<hr>
+
+<h2>{{ 'Field Options'|t('freelink') }}</h2>
+
+{{ forms.lightswitchField({
+    label: 'Allow multiple links'|t('freelink'),
+    instructions: 'When enabled, content editors can add multiple links to a single field.'|t('freelink'),
+    name: 'multipleLinks',
+    on: field.multipleLinks,
+}) }}
+
+<div id="freelink-multi-settings" class="{{ not field.multipleLinks ? 'hidden' }}">
+    <div style="display: flex; gap: 24px;">
+        {{ forms.textField({
+            label: 'Min Links'|t('freelink'),
+            name: 'minLinks',
+            value: field.minLinks,
+            type: 'number',
+            min: 0,
+            size: 4,
+        }) }}
+
+        {{ forms.textField({
+            label: 'Max Links'|t('freelink'),
+            name: 'maxLinks',
+            value: field.maxLinks,
+            type: 'number',
+            min: 0,
+            size: 4,
+            instructions: '0 = no limit'|t('freelink'),
+        }) }}
+    </div>
+</div>
+
+<hr>
+
+<h2>{{ 'Display Options'|t('freelink') }}</h2>
+
+{{ forms.lightswitchField({
+    label: 'Show Link Text field'|t('freelink'),
+    instructions: 'Allow editors to set custom link text.'|t('freelink'),
+    name: 'showLabel',
+    on: field.showLabel,
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Show "Open in new window" toggle'|t('freelink'),
+    name: 'showNewWindow',
+    on: field.showNewWindow,
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Show advanced attributes'|t('freelink'),
+    instructions: 'ARIA label, title, URL suffix, CSS classes, HTML ID, rel, and custom attributes.'|t('freelink'),
+    name: 'showAdvanced',
+    on: field.showAdvanced,
+}) }}
+
+<hr>
+
+<h2>{{ 'Defaults'|t('freelink') }}</h2>
+
+{% set enabledTypeOptions = [] %}
+{% for typeOpt in typeOptions %}
+    {% if typeOpt.enabled %}
+        {% set enabledTypeOptions = enabledTypeOptions|merge([{
+            label: typeOpt.label,
+            value: typeOpt.handle,
+        }]) %}
+    {% endif %}
+{% endfor %}
+
+{{ forms.selectField({
+    label: 'Default Link Type'|t('freelink'),
+    name: 'defaultLinkType',
+    value: field.defaultLinkType,
+    options: enabledTypeOptions|length ? enabledTypeOptions : [{label: 'URL', value: 'url'}],
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Default: Open in new window'|t('freelink'),
+    name: 'defaultNewWindow',
+    on: field.defaultNewWindow,
+}) }}
+
+{% js %}
+    (function() {
+        var $multiToggle = $('[name="multipleLinks"]').closest('.lightswitch');
+        var $multiSettings = $('#freelink-multi-settings');
+
+        if ($multiToggle.length) {
+            $multiToggle.on('change', function() {
+                var on = $(this).data('lightswitch').on;
+                $multiSettings.toggleClass('hidden', !on);
+            });
+        }
+    })();
+{% endjs %}

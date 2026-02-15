@@ -1,0 +1,34 @@
+{
+    "name": "justinholtweb/craft-freelink",
+    "description": "A powerful, lightweight link field for Craft CMS 5 with hybrid storage, proper element relations, and migration paths from popular link plugins.",
+    "type": "craft-plugin",
+    "license": "proprietary",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "craftcms/cms": "^5.0.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "justinholtweb\\freelink\\": "src/"
+        }
+    },
+    "extra": {
+        "name": "FreeLink",
+        "handle": "freelink",
+        "hasCpSettings": false,
+        "hasCpSection": false,
+        "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-freelink/main/CHANGELOG.md",
+        "class": "justinholtweb\\freelink\\Plugin",
+        "developer": "Justin Holt",
+        "developerUrl": "https://justinholtweb.com",
+        "documentationUrl": "https://github.com/justinholtweb/craft-freelink/blob/main/README.md"
+    },
+    "config": {
+        "allow-plugins": {
+            "yiisoft/yii2-composer": true,
+            "craftcms/plugin-installer": true
+        }
+    }
+}

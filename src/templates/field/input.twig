@@ -1,0 +1,55 @@
+{# Field input template for FreeLink #}
+
+{% set namePrefix = name %}
+
+<div id="{{ namespacedId }}"
+     class="freelink-field"
+     {% if multipleLinks %}data-multiple{% endif %}
+     data-freelink-settings="{{ {
+         fieldName: name,
+         multipleLinks: multipleLinks,
+         minLinks: minLinks,
+         maxLinks: maxLinks,
+         defaultLinkType: defaultLinkType,
+         defaultNewWindow: defaultNewWindow,
+     }|json_encode|e('html_attr') }}">
+
+    <div class="freelink-links">
+        {% for link in links %}
+            {% include 'freelink/field/_link-block' with {
+                link: link,
+                index: loop.index0,
+                namePrefix: namePrefix ~ (multipleLinks ? '[' ~ loop.index0 ~ ']' : ''),
+                typeOptions: typeOptions,
+                showLabel: showLabel,
+                showNewWindow: showNewWindow,
+                showAdvanced: showAdvanced,
+                field: field,
+            } only %}
+        {% endfor %}
+    </div>
+
+    {% if multipleLinks %}
+        <button type="button" class="btn add icon freelink-add-btn">
+            {{ 'Add a link'|t('freelink') }}
+        </button>
+
+        {# Template for new link blocks (cloned by JS) #}
+        <script type="text/template" class="freelink-link-template">
+            {% set templateLink = craft.app.plugins.getPlugin('freelink').links.createLink({
+                type: defaultLinkType,
+                newWindow: defaultNewWindow,
+            }) %}
+            {% include 'freelink/field/_link-block' with {
+                link: templateLink,
+                index: '__INDEX__',
+                namePrefix: namePrefix ~ '[__INDEX__]',
+                typeOptions: typeOptions,
+                showLabel: showLabel,
+                showNewWindow: showNewWindow,
+                showAdvanced: showAdvanced,
+                field: field,
+            } only %}
+        </script>
+    {% endif %}
+</div>

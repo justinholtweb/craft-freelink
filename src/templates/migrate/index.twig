@@ -1,0 +1,69 @@
+{# Migration CP page (optional) #}
+{% extends '_layouts/cp' %}
+
+{% set title = 'FreeLink Migrations'|t('freelink') %}
+
+{% block content %}
+    <h2>{{ 'Available Migrations'|t('freelink') }}</h2>
+
+    {% set available = craft.app.plugins.getPlugin('freelink').migrate.getAvailableMigrations() %}
+
+    {% if available|length %}
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ 'Source Plugin'|t('freelink') }}</th>
+                    <th>{{ 'Fields Found'|t('freelink') }}</th>
+                    <th>{{ 'Action'|t('freelink') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, info in available %}
+                    <tr>
+                        <td>{{ info.label }}</td>
+                        <td>{{ info.fieldCount }}</td>
+                        <td>
+                            <code>php craft freelink/migrate/from-{{ key }}</code>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="light">{{ 'No compatible link field plugins detected.'|t('freelink') }}</p>
+    {% endif %}
+
+    <hr>
+
+    <h2>{{ 'Migration History'|t('freelink') }}</h2>
+
+    {% set history = craft.app.plugins.getPlugin('freelink').migrate.getStatus() %}
+
+    {% if history|length %}
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ 'Source'|t('freelink') }}</th>
+                    <th>{{ 'Field ID'|t('freelink') }}</th>
+                    <th>{{ 'Status'|t('freelink') }}</th>
+                    <th>{{ 'Date'|t('freelink') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for migration in history %}
+                    <tr>
+                        <td>{{ migration.sourcePlugin }}</td>
+                        <td>{{ migration.fieldId }}</td>
+                        <td>
+                            <span class="status {{ migration.status == 'complete' ? 'green' : (migration.status == 'failed' ? 'red' : 'orange') }}"></span>
+                            {{ migration.status }}
+                        </td>
+                        <td>{{ migration.dateUpdated|datetime }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="light">{{ 'No migrations have been run yet.'|t('freelink') }}</p>
+    {% endif %}
+{% endblock %}

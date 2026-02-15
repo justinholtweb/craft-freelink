@@ -1,0 +1,176 @@
+/* FreeLink Field Styles */
+
+.freelink-field {
+    position: relative;
+}
+
+/* Link block */
+.freelink-link-block {
+    border: 1px solid var(--gray-200);
+    border-radius: var(--large-border-radius);
+    background: var(--white);
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.freelink-link-block:last-child {
+    margin-bottom: 0;
+}
+
+/* Block header */
+.freelink-link-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--gray-050);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.freelink-drag-handle {
+    cursor: grab;
+    color: var(--gray-300);
+    flex-shrink: 0;
+}
+
+.freelink-drag-handle:active {
+    cursor: grabbing;
+}
+
+.freelink-type-select {
+    flex-grow: 0;
+    min-width: 120px;
+}
+
+.freelink-link-header .flex-grow {
+    flex-grow: 1;
+}
+
+.freelink-remove-btn {
+    flex-shrink: 0;
+    color: var(--gray-400);
+    cursor: pointer;
+}
+
+.freelink-remove-btn:hover {
+    color: var(--red-500);
+}
+
+/* Block body */
+.freelink-link-body {
+    padding: 12px;
+}
+
+.freelink-link-body .field {
+    margin-bottom: 12px;
+}
+
+.freelink-link-body .field:last-child {
+    margin-bottom: 0;
+}
+
+/* Type-specific inputs */
+.freelink-type-input {
+    margin-bottom: 12px;
+}
+
+.freelink-type-input:last-child {
+    margin-bottom: 0;
+}
+
+.freelink-type-input.hidden {
+    display: none;
+}
+
+/* Advanced section */
+.freelink-advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--gray-200);
+    background: var(--gray-050);
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--gray-500);
+    user-select: none;
+}
+
+.freelink-advanced-toggle:hover {
+    color: var(--gray-700);
+}
+
+.freelink-advanced-body {
+    padding: 12px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.freelink-advanced-body.hidden {
+    display: none;
+}
+
+.freelink-advanced-body .field {
+    margin-bottom: 12px;
+}
+
+.freelink-advanced-body .field:last-child {
+    margin-bottom: 0;
+}
+
+/* Add button */
+.freelink-add-btn {
+    margin-top: 10px;
+}
+
+/* Inline fields */
+.freelink-inline-fields {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.freelink-inline-fields > .field {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+/* Custom attributes table */
+.freelink-custom-attrs {
+    width: 100%;
+}
+
+.freelink-custom-attrs th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--gray-500);
+    padding-bottom: 4px;
+}
+
+.freelink-custom-attrs td {
+    padding: 2px 4px 2px 0;
+}
+
+.freelink-custom-attrs td:last-child {
+    padding-right: 0;
+    width: 32px;
+    text-align: center;
+}
+
+.freelink-custom-attrs input[type="text"] {
+    width: 100%;
+}
+
+/* Link template (hidden) */
+.freelink-link-template {
+    display: none;
+}
+
+/* Single link mode - no drag handle */
+.freelink-field:not([data-multiple]) .freelink-drag-handle {
+    display: none;
+}
+
+.freelink-field:not([data-multiple]) .freelink-remove-btn {
+    display: none;
+}

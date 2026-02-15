@@ -1,0 +1,218 @@
+{# Single link block partial #}
+
+<div class="freelink-link-block" data-index="{{ index }}">
+    {# Header #}
+    <div class="freelink-link-header">
+        <div class="freelink-drag-handle" title="{{ 'Reorder'|t('app') }}">
+            <span data-icon="move"></span>
+        </div>
+
+        {% if typeOptions|length > 1 %}
+            <div>
+                <select class="freelink-type-select" name="{{ namePrefix }}[type]">
+                    {% for typeOpt in typeOptions %}
+                        <option value="{{ typeOpt.handle }}"
+                                {% if typeOpt.handle == link.type %}selected{% endif %}>
+                            {{ typeOpt.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% else %}
+            <input type="hidden" name="{{ namePrefix }}[type]" value="{{ link.type }}">
+            <span class="light">{{ typeOptions[0].label ?? link.type }}</span>
+        {% endif %}
+
+        <div class="flex-grow"></div>
+
+        <a class="freelink-remove-btn delete icon" title="{{ 'Remove'|t('app') }}"></a>
+    </div>
+
+    {# Body #}
+    <div class="freelink-link-body">
+        {# Type-specific inputs #}
+        {% for typeOpt in typeOptions %}
+            <div class="freelink-type-input {{ typeOpt.handle != link.type ? 'hidden' : '' }}"
+                 data-type="{{ typeOpt.handle }}">
+                {% if typeOpt.isElement %}
+                    {# Element selector #}
+                    {% set elementType = craft.app.plugins.getPlugin('freelink').links.getTypeByHandle(typeOpt.handle) %}
+                    {% if elementType %}
+                        {% set elClass = (create(elementType)).elementType() %}
+                        {% set selectedElements = [] %}
+                        {% if typeOpt.handle == link.type and link.isElement() and link.getElement() %}
+                            {% set selectedElements = [link.getElement()] %}
+                        {% endif %}
+
+                        {% set sources = field.linkTypes[typeOpt.handle].sources ?? '*' %}
+
+                        {{ craft.app.view.renderTemplate('_includes/forms/elementSelect', {
+                            name: namePrefix ~ '[elements][' ~ typeOpt.handle ~ ']',
+                            elementType: elClass,
+                            elements: selectedElements,
+                            sources: sources != '*' ? sources : null,
+                            limit: 1,
+                            modalStorageKey: 'freelink.' ~ typeOpt.handle,
+                        }) }}
+                    {% endif %}
+                {% else %}
+                    {# Text input for simple link types #}
+                    {% set placeholder = '' %}
+                    {% if typeOpt.handle == 'url' %}
+                        {% set placeholder = 'https://' %}
+                    {% elseif typeOpt.handle == 'email' %}
+                        {% set placeholder = 'hello@example.com' %}
+                    {% elseif typeOpt.handle == 'phone' or typeOpt.handle == 'sms' %}
+                        {% set placeholder = '+1 (555) 123-4567' %}
+                    {% endif %}
+
+                    <div class="field">
+                        <div class="input">
+                            <input type="text"
+                                   class="text fullwidth"
+                                   name="{{ namePrefix }}[values][{{ typeOpt.handle }}]"
+                                   value="{{ typeOpt.handle == link.type ? link.value : '' }}"
+                                   placeholder="{{ placeholder }}">
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+
+        {# Label field #}
+        {% if showLabel %}
+            <div class="field">
+                <div class="heading">
+                    <label>{{ 'Link Text'|t('freelink') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text"
+                           class="text fullwidth"
+                           name="{{ namePrefix }}[label]"
+                           value="{{ link.label }}"
+                           placeholder="{{ 'Link text (optional)'|t('freelink') }}">
+                </div>
+            </div>
+        {% endif %}
+
+        {# New window toggle #}
+        {% if showNewWindow %}
+            <div class="field">
+                {{ craft.app.view.renderTemplate('_includes/forms/lightswitch', {
+                    name: namePrefix ~ '[newWindow]',
+                    on: link.newWindow,
+                    label: 'Open in new window'|t('freelink'),
+                    small: true,
+                }) }}
+            </div>
+        {% endif %}
+    </div>
+
+    {# Advanced section #}
+    {% if showAdvanced %}
+        <button type="button" class="freelink-advanced-toggle" aria-expanded="false">
+            <span data-icon="settings"></span>
+            {{ 'Advanced'|t('freelink') }}
+        </button>
+
+        <div class="freelink-advanced-body hidden">
+            {# Aria Label #}
+            <div class="field">
+                <div class="heading">
+                    <label>{{ 'ARIA Label'|t('freelink') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" class="text fullwidth"
+                           name="{{ namePrefix }}[ariaLabel]"
+                           value="{{ link.ariaLabel }}">
+                </div>
+            </div>
+
+            {# Title #}
+            <div class="field">
+                <div class="heading">
+                    <label>{{ 'Title Attribute'|t('freelink') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" class="text fullwidth"
+                           name="{{ namePrefix }}[title]"
+                           value="{{ link.title }}">
+                </div>
+            </div>
+
+            <div class="freelink-inline-fields">
+                {# URL Suffix #}
+                <div class="field">
+                    <div class="heading">
+                        <label>{{ 'URL Suffix'|t('freelink') }}</label>
+                    </div>
+                    <div class="input">
+                        <input type="text" class="text fullwidth"
+                               name="{{ namePrefix }}[urlSuffix]"
+                               value="{{ link.urlSuffix }}"
+                               placeholder="#section or ?param=value">
+                    </div>
+                </div>
+
+                {# CSS Classes #}
+                <div class="field">
+                    <div class="heading">
+                        <label>{{ 'CSS Classes'|t('freelink') }}</label>
+                    </div>
+                    <div class="input">
+                        <input type="text" class="text fullwidth"
+                               name="{{ namePrefix }}[classes]"
+                               value="{{ link.classes }}">
+                    </div>
+                </div>
+            </div>
+
+            <div class="freelink-inline-fields">
+                {# HTML ID #}
+                <div class="field">
+                    <div class="heading">
+                        <label>{{ 'HTML ID'|t('freelink') }}</label>
+                    </div>
+                    <div class="input">
+                        <input type="text" class="text fullwidth"
+                               name="{{ namePrefix }}[id]"
+                               value="{{ link.id }}">
+                    </div>
+                </div>
+
+                {# Rel Attribute #}
+                <div class="field">
+                    <div class="heading">
+                        <label>{{ 'Rel Attribute'|t('freelink') }}</label>
+                    </div>
+                    <div class="input">
+                        <input type="text" class="text fullwidth"
+                               name="{{ namePrefix }}[rel]"
+                               value="{{ link.rel }}"
+                               placeholder="noopener noreferrer">
+                    </div>
+                </div>
+            </div>
+
+            {# Custom Attributes #}
+            <div class="field">
+                <div class="heading">
+                    <label>{{ 'Custom Attributes'|t('freelink') }}</label>
+                </div>
+                <div class="input">
+                    {{ craft.app.view.renderTemplate('_includes/forms/editableTable', {
+                        name: namePrefix ~ '[customAttributes]',
+                        cols: {
+                            attribute: {heading: 'Attribute'|t('freelink'), type: 'singleline'},
+                            value: {heading: 'Value'|t('freelink'), type: 'singleline'},
+                        },
+                        rows: link.customAttributes ?? [],
+                        allowAdd: true,
+                        allowDelete: true,
+                        allowReorder: false,
+                    }) }}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>

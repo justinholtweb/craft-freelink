@@ -1,0 +1,17 @@
+{# Element selector input for element link types #}
+<div class="field">
+    <div class="input">
+        {{ craft.app.view.renderTemplate('_includes/forms/elementSelect', {
+            name: namePrefix ~ '[targetId]',
+            elementType: elementType,
+            elements: elements,
+            sources: sources != '*' ? sources : null,
+            criteria: criteria,
+            limit: limit,
+            modalStorageKey: 'freelink.element',
+        }) }}
+        {% if targetSiteId %}
+            <input type="hidden" name="{{ namePrefix }}[targetSiteId]" value="{{ targetSiteId }}">
+        {% endif %}
+    </div>
+</div>
