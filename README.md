@@ -164,6 +164,81 @@ FreeLink fields return `[FreeLinkInterface]` (always an array; single-link mode 
 }
 ```
 
+## Element API
+
+FreeLink works out of the box with [`craftcms/element-api`](https://github.com/craftcms/element-api). `Link` and `LinkCollection` implement `JsonSerializable`, so field values serialize to clean JSON objects with resolved URLs, display text, and element metadata.
+
+```php
+// config/element-api.php
+use craft\elementapi\Plugin as ElementApi;
+use craft\elements\Entry;
+
+return [
+    'endpoints' => [
+        'news.json' => function() {
+            return [
+                'elementType' => Entry::class,
+                'criteria' => ['section' => 'news'],
+                'transformer' => function(Entry $entry) {
+                    return [
+                        'title' => $entry->title,
+                        'link' => $entry->myLink,  // Single link → object
+                        'links' => $entry->myLinks, // Multi link → array
+                    ];
+                },
+            ];
+        },
+    ],
+];
+```
+
+Single-link fields produce a JSON object:
+
+```json
+{
+  "link": {
+    "type": "url",
+    "url": "https://example.com#pricing",
+    "text": "Visit Example",
+    "target": "_blank",
+    "newWindow": true,
+    "isEmpty": false,
+    "isElement": false
+  }
+}
+```
+
+Element link fields include additional metadata:
+
+```json
+{
+  "link": {
+    "type": "entry",
+    "url": "https://example.com/blog/my-post",
+    "text": "My Blog Post",
+    "target": null,
+    "newWindow": false,
+    "isEmpty": false,
+    "isElement": true,
+    "elementId": 42,
+    "elementSiteId": 1,
+    "elementType": "craft\\elements\\Entry",
+    "elementTitle": "My Blog Post",
+    "elementUrl": "https://example.com/blog/my-post",
+    "elementStatus": "live"
+  }
+}
+```
+
+Multi-link fields produce an array of objects.
+
+You can also call `toApiArray()` directly on any link for programmatic use:
+
+```php
+$link = $entry->myLink->one();
+$data = $link->toApiArray();
+```
+
 ## Custom Link Types
 
 Register custom link types via the `EVENT_REGISTER_LINK_TYPES` event:
