@@ -1,13 +1,13 @@
 # Changelog
 
-## 1.0.0 - Unreleased
+## 1.0.0 - 2026-06-11
 
 ### Added
 - Initial release
 - 12 built-in link types: URL, Email, Phone, SMS, Custom, Site, Entry, Asset, Category, User, Product, Variant
 - Hybrid storage with JSON content column and relations table for element links
 - Single and multi-link field modes
-- Eager loading support for element links
+- Automatic element resolution for element links (entries, assets, etc.)
 - GraphQL support
 - Custom link type registration via events
 - Migration commands for Hyper, Linkit, Typed Link Field, and native Craft Link fields

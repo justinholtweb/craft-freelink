@@ -6,7 +6,7 @@ A powerful, lightweight link field plugin for Craft CMS 5. Hybrid storage with p
 
 FreeLink takes a different approach to link fields:
 
-- **Hybrid storage** — Simple links (URL, email, phone) are stored as JSON in the content column. Element links (entries, assets, etc.) get proper rows in a relations table with foreign keys. This gives you referential integrity, efficient eager loading, and reverse lookups without a separate cache table.
+- **Hybrid storage** — Simple links (URL, email, phone) are stored as JSON in the content column. Element links (entries, assets, etc.) get proper rows in a relations table with foreign keys. This gives you referential integrity and reverse lookups without a separate cache table.
 - **Lightweight models** — Links extend `yii\base\Model`, not Craft's `Element` class. Less overhead, simpler API.
 - **Native CP UI** — Field UI uses Craft's Garnish library and vanilla JS. No Vue.js, no Alpine.js.
 
@@ -104,16 +104,22 @@ The field value is a `LinkCollection` that transparently proxies to the first li
 {% endfor %}
 ```
 
-### Eager Loading
+### Element Resolution
 
-Element links are stored in a relations table, so eager loading works efficiently:
+Element links (entry, asset, category, user, product, variant) resolve their
+target element automatically when you access it — no `.with()` needed:
 
 ```twig
-{% set entries = craft.entries.with(['myLink']).all() %}
-{% for entry in entries %}
-    {{ entry.myLink.link }}  {# No N+1 queries #}
+{% for entry in craft.entries.section('news').all() %}
+    {{ entry.myLink.link }}              {# resolves the linked element on access #}
+    {{ entry.myLink.element.title }}
 {% endfor %}
 ```
+
+> **Note:** Because the field value is a `LinkCollection` value object (not a raw
+> element list), it does **not** participate in Craft's `.with([...])` eager
+> loading. Don't pass a FreeLink field handle to `.with()` — element links
+> resolve lazily on access instead.
 
 ### Reverse Lookups
 

@@ -29,11 +29,11 @@ Links extend `yii\base\Model`, NOT `craft\base\Element`. This avoids the overhea
 |-------|------|------|
 | `Plugin` | `src/Plugin.php` | Entry point, registers services/field type/twig/console |
 | `Link` | `src/base/Link.php` | Base link model (all simple types extend this) |
-| `ElementLink` | `src/base/ElementLink.php` | Element link model (adds `targetId`, lazy loading, eager loading) |
+| `ElementLink` | `src/base/ElementLink.php` | Element link model (adds `targetId`, lazy element loading) |
 | `LinkCollection` | `src/models/LinkCollection.php` | Field value. Transparent proxy pattern for single-link mode. Implements `IteratorAggregate`, `Countable`, `ArrayAccess`, `Stringable`, `JsonSerializable` |
-| `FreeLinkField` | `src/fields/FreeLinkField.php` | Craft field type. Normalization, serialization, lifecycle, eager loading, validation, GQL |
+| `FreeLinkField` | `src/fields/FreeLinkField.php` | Craft field type. Normalization, serialization, lifecycle, validation, GQL |
 | `Links` | `src/services/Links.php` | Link type registry |
-| `Relations` | `src/services/Relations.php` | `freelink_links` table CRUD, eager loading maps, reverse lookups |
+| `Relations` | `src/services/Relations.php` | `freelink_links` table CRUD, reverse lookups |
 | `Migrate` | `src/services/Migrate.php` | Migration orchestrator for Hyper/Linkit/Typed Link/Craft Link |
 
 ### Link Types (12 built-in)
@@ -77,9 +77,12 @@ Two serialization modes exist:
 1. Content column JSON → `FreeLinkField::normalizeValue()`
 2. Decoded JSON + `freelink_links` query for element types → `Links::createLink()` → `LinkCollection`
 
-### Eager Loading
-- `getEagerLoadingMap()` queries `freelink_links` for all owner IDs at once
-- Craft batch-loads target elements → `ElementLink::setElement()`
+### Element Resolution
+- Element links resolve lazily via `ElementLink::getElement()` (one query per
+  link, cached). `setElement()` allows injecting a pre-loaded element.
+- The field does **not** implement `EagerLoadingFieldInterface`: Craft's
+  `.with([...])` would return a raw `ElementCollection` and clobber the
+  `LinkCollection` value object, so FreeLink fields are not `.with()`-able.
 
 ## File Layout
 
@@ -142,10 +145,24 @@ src/
 
 ## Testing
 
-No automated test suite. Manual verification:
+### Automated (PHPUnit)
+
+Unit tests in `tests/unit/` (config: `phpunit.xml.dist`, bootstrap:
+`tests/bootstrap.php`) cover link models, the `LinkCollection` proxy,
+serialization, and the `Links` registry. The bootstrap finds a Composer
+autoloader (via `FREELINK_AUTOLOAD`, the plugin's own `vendor/`, or the standard
+dependency path) and boots a Craft console app when one is reachable so
+`Craft::$app`-dependent helpers work.
+
+- Standalone: `composer install` then `composer test`.
+- No host PHP: run inside the `plugin-testing` DDEV container —
+  `ddev exec "cd /var/www/craft-freelink && FREELINK_AUTOLOAD=/var/www/html/vendor/autoload.php php /tmp/phpunit.phar"`.
+
+### Manual verification
+
 1. Install plugin → confirm `freelink_links` table created
 2. Create field, configure types, add links, save → verify JSON + relations rows
-3. Eager loading: `craft.entries.with(['field']).all()` — no N+1
+3. Element resolution: `{{ entry.field.element.title }}` resolves the linked element
 4. GraphQL queries
 5. Element API: `json_encode($linkCollection)` returns proper objects
 6. Migration commands with `--dry-run` first

@@ -201,6 +201,7 @@
                 </div>
                 <div class="input">
                     {{ craft.app.view.renderTemplate('_includes/forms/editableTable', {
+                        id: 'freelink-custom-attrs-' ~ index,
                         name: namePrefix ~ '[customAttributes]',
                         cols: {
                             attribute: {heading: 'Attribute'|t('freelink'), type: 'singleline'},

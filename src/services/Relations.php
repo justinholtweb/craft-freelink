@@ -108,27 +108,6 @@ class Relations extends Component
     }
 
     /**
-     * Returns an eager-loading map: owner element IDs → target element IDs.
-     * Used by FreeLinkField::getEagerLoadingMap().
-     */
-    public function getEagerLoadingMap(int $fieldId, array $ownerElementIds): array
-    {
-        if (empty($ownerElementIds)) {
-            return [];
-        }
-
-        return (new Query())
-            ->select(['ownerId as source', 'targetId as target'])
-            ->from('{{%freelink_links}}')
-            ->where([
-                'fieldId' => $fieldId,
-                'ownerId' => $ownerElementIds,
-            ])
-            ->andWhere(['not', ['targetId' => null]])
-            ->all();
-    }
-
-    /**
      * Returns all relations for a field (used for reverse lookups).
      */
     public function getRelatedOwners(int $targetId, ?int $fieldId = null): array

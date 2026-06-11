@@ -3,16 +3,16 @@
 namespace justinholtweb\freelink\fields;
 
 use Craft;
+use craft\base\Element;
 use craft\base\ElementInterface;
 use craft\base\Field;
-use craft\base\EagerLoadingFieldInterface;
 use craft\helpers\Json;
 use justinholtweb\freelink\base\ElementLink;
 use justinholtweb\freelink\base\Link;
 use justinholtweb\freelink\models\LinkCollection;
 use justinholtweb\freelink\Plugin;
 
-class FreeLinkField extends Field implements EagerLoadingFieldInterface
+class FreeLinkField extends Field
 {
     // region Settings
 
@@ -224,47 +224,6 @@ class FreeLinkField extends Field implements EagerLoadingFieldInterface
 
     // endregion
 
-    // region Eager loading
-
-    public function getEagerLoadingMap(array $sourceElements): array|null|false
-    {
-        $sourceElementIds = array_map(fn(ElementInterface $el) => $el->id, $sourceElements);
-
-        $map = Plugin::getInstance()->relations->getEagerLoadingMap($this->id, $sourceElementIds);
-
-        if (empty($map)) {
-            return null;
-        }
-
-        // Determine the element types involved
-        $elementTypes = [];
-        foreach ($this->getEnabledTypeHandles() as $handle) {
-            $class = Plugin::getInstance()->links->getTypeByHandle($handle);
-            if ($class && is_subclass_of($class, ElementLink::class)) {
-                $elementTypes[] = $class::elementType();
-            }
-        }
-
-        // Use the first element type as the primary; Craft uses this to query elements
-        $elementType = $elementTypes[0] ?? null;
-
-        if (!$elementType) {
-            return null;
-        }
-
-        return [
-            'elementType' => $elementType,
-            'map' => $map,
-        ];
-    }
-
-    public function eagerLoadingMap(array $sourceElements): array|null|false
-    {
-        return $this->getEagerLoadingMap($sourceElements);
-    }
-
-    // endregion
-
     // region Input
 
     public function getInputHtml(mixed $value, ?ElementInterface $element = null): string
@@ -334,7 +293,7 @@ class FreeLinkField extends Field implements EagerLoadingFieldInterface
 
         $rules[] = [
             'validateLinks',
-            'on' => [ElementInterface::SCENARIO_LIVE],
+            'on' => [Element::SCENARIO_LIVE],
         ];
 
         return $rules;
