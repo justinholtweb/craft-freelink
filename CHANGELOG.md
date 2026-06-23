@@ -1,6 +1,11 @@
 # Changelog
 
-## 1.0.0 - 2026-06-11
+## 5.0.1 - 2026-06-23
+
+### Fixed
+- Fixed field inputs rendering as escaped HTML markup (element selects, lightswitch, and nested link blocks) by marking the form macro output as raw
+
+## 5.0.0 - 2026-06-11
 
 ### Added
 - Initial release
