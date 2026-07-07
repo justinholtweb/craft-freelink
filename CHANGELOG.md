@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.0.2 - 2026-07-07
+
+### Fixed
+- Fixed links saved through the control panel coming out with a null destination. The field now maps the CP form's `values[<type>]`/`elements[<type>]` inputs onto the value and target element it stores, so URLs, emails, and other links save correctly. Element links now also capture their target on first save and when changed or cleared in the control panel.
+
 ## 5.0.1 - 2026-06-23
 
 ### Fixed

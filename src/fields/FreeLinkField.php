@@ -133,9 +133,27 @@ class FreeLinkField extends Field
                 continue;
             }
 
-            // Inject element relation data from the relations table
-            $typeClass = $linksService->getTypeByHandle($linkData['type'] ?? '');
-            if ($typeClass && is_subclass_of($typeClass, ElementLink::class)) {
+            $type = $linkData['type'] ?? '';
+
+            // The CP form posts type-specific inputs under keys namespaced by
+            // handle: values[<type>] for scalar link types and elements[<type>]
+            // for element selectors (see field/_link-block.twig). Map that POST
+            // shape onto the flat value/targetId keys createLink() expects.
+            // Their presence also marks this as a form submission, in which case
+            // the POST is authoritative over the relations table below.
+            $isPost = isset($linkData['values']) || isset($linkData['elements']);
+            if (!isset($linkData['value']) && isset($linkData['values']) && is_array($linkData['values'])) {
+                $linkData['value'] = $linkData['values'][$type] ?? null;
+            }
+            if (!isset($linkData['targetId']) && isset($linkData['elements']) && is_array($linkData['elements'])) {
+                $selected = $linkData['elements'][$type] ?? null;
+                $linkData['targetId'] = is_array($selected) ? ($selected[0] ?? null) : $selected;
+            }
+
+            // On a DB load (not a POST), the relations table is the source of
+            // truth for which element an element link points at.
+            $typeClass = $linksService->getTypeByHandle($type);
+            if (!$isPost && $typeClass && is_subclass_of($typeClass, ElementLink::class)) {
                 if (isset($relations[$sortOrder])) {
                     $linkData['targetId'] = $relations[$sortOrder]['targetId'];
                     $linkData['targetSiteId'] = $relations[$sortOrder]['targetSiteId'];
