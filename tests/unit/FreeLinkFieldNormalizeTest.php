@@ -72,6 +72,25 @@ class FreeLinkFieldNormalizeTest extends TestCase
         self::assertSame('hello@example.com', $links[1]->value);
     }
 
+    public function testEmailPostShapeCapturesSubject(): void
+    {
+        // The email subject posts as a flat [subject] key alongside the
+        // handle-namespaced values[email] input.
+        $value = $this->field->normalizeValue([
+            'type' => 'email',
+            'values' => ['email' => 'hello@example.com'],
+            'subject' => 'Quote request',
+        ]);
+
+        $link = $value->first();
+        self::assertSame('hello@example.com', $link->value);
+        self::assertSame('Quote request', $link->subject);
+        self::assertSame(
+            'mailto:hello@example.com?subject=Quote%20request',
+            $link->getUrl(),
+        );
+    }
+
     public function testElementLinkPostShapeCapturesTargetId(): void
     {
         // elementSelect posts the selected id(s) as an array under elements[<type>].

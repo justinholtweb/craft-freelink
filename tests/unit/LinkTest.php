@@ -74,6 +74,41 @@ class LinkTest extends TestCase
         self::assertSame('hello@example.com', $link->getText());
     }
 
+    public function testEmailEncodesSubjectIntoMailtoUrl(): void
+    {
+        $link = new Email();
+        $link->type = 'email';
+        $link->value = 'hello@example.com';
+        $link->subject = 'Hi there & welcome';
+
+        self::assertSame(
+            'mailto:hello@example.com?subject=Hi%20there%20%26%20welcome',
+            $link->getUrl(),
+        );
+    }
+
+    public function testEmailWithoutSubjectHasPlainMailtoUrl(): void
+    {
+        $link = new Email();
+        $link->type = 'email';
+        $link->value = 'hello@example.com';
+
+        // Empty string should be treated the same as no subject.
+        $link->subject = '';
+        self::assertSame('mailto:hello@example.com', $link->getUrl());
+    }
+
+    public function testEmailSubjectRoundTripsThroughArrays(): void
+    {
+        $link = new Email();
+        $link->type = 'email';
+        $link->value = 'hello@example.com';
+        $link->subject = 'Quote request';
+
+        self::assertSame('Quote request', $link->toArray()['subject']);
+        self::assertSame('Quote request', $link->toApiArray()['subject']);
+    }
+
     public function testPhoneStripsFormattingForTelUri(): void
     {
         $link = new Phone();

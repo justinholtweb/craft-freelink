@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.1.0 - 2026-07-07
+
+### Added
+- Email link type now has an optional subject line, encoded into the `mailto:` URL as `?subject=`. The subject is available in Twig (via the resolved URL), API/JSON output (`subject`), and GraphQL (via the resolved `url`).
+
 ## 5.0.2 - 2026-07-07
 
 ### Fixed

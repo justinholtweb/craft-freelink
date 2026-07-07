@@ -75,6 +75,22 @@
                                    placeholder="{{ placeholder }}">
                         </div>
                     </div>
+
+                    {% if typeOpt.handle == 'email' %}
+                        {# Optional subject line, encoded into the mailto: URL #}
+                        <div class="field">
+                            <div class="heading">
+                                <label>{{ 'Subject'|t('freelink') }}</label>
+                            </div>
+                            <div class="input">
+                                <input type="text"
+                                       class="text fullwidth"
+                                       name="{{ namePrefix }}[subject]"
+                                       value="{{ link.type == 'email' ? link.subject : '' }}"
+                                       placeholder="{{ 'Optional email subject'|t('freelink') }}">
+                            </div>
+                        </div>
+                    {% endif %}
                 {% endif %}
             </div>
         {% endfor %}

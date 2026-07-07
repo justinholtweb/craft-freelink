@@ -119,6 +119,11 @@ class Links extends Component
             $link->siteId = (int)$data['siteId'];
         }
 
+        // Email link specific
+        if ($link instanceof \justinholtweb\freelink\links\Email && isset($data['subject'])) {
+            $link->subject = $data['subject'] !== '' ? $data['subject'] : null;
+        }
+
         return $link;
     }
 

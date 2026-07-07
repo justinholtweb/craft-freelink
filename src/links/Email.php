@@ -6,6 +6,11 @@ use justinholtweb\freelink\base\Link;
 
 class Email extends Link
 {
+    /**
+     * Optional subject line, encoded into the mailto: URL as ?subject=.
+     */
+    public ?string $subject = null;
+
     public static function displayName(): string
     {
         return 'Email';
@@ -27,7 +32,13 @@ class Email extends Link
             return null;
         }
 
-        return 'mailto:' . $this->value;
+        $url = 'mailto:' . $this->value;
+
+        if (!empty($this->subject)) {
+            $url .= '?subject=' . rawurlencode($this->subject);
+        }
+
+        return $url;
     }
 
     public function getText(): ?string
@@ -39,7 +50,24 @@ class Email extends Link
     {
         $rules = parent::rules();
         $rules[] = ['value', 'email'];
+        $rules[] = ['subject', 'string'];
 
         return $rules;
+    }
+
+    public function toArray(array $fields = [], array $expand = [], $recursive = true): array
+    {
+        $data = parent::toArray($fields, $expand, $recursive);
+        $data['subject'] = $this->subject;
+
+        return $data;
+    }
+
+    public function toApiArray(): array
+    {
+        $data = parent::toApiArray();
+        $data['subject'] = $this->subject;
+
+        return $data;
     }
 }
