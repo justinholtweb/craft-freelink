@@ -64,6 +64,8 @@ class Links extends Component
 
     /**
      * Returns a link type class by handle.
+     *
+     * @return class-string<Link>|null
      */
     public function getTypeByHandle(string $handle): ?string
     {
@@ -74,6 +76,8 @@ class Links extends Component
 
     /**
      * Creates a Link model from an array of data.
+     *
+     * @param array<string, mixed> $data
      */
     public function createLink(array $data): ?Link
     {

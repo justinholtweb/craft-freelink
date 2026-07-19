@@ -8,6 +8,8 @@ class FreeLinkArguments
 {
     /**
      * Returns the argument definitions for querying FreeLink fields.
+     *
+     * @return array<string, mixed>
      */
     public static function getArguments(): array
     {

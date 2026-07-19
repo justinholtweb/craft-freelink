@@ -25,6 +25,7 @@ class Link extends Model implements JsonSerializable
     public ?string $classes = null;
     public ?string $id = null;
     public ?string $rel = null;
+    /** @var list<array<string, mixed>> */
     public array $customAttributes = [];
 
     /**
@@ -108,6 +109,8 @@ class Link extends Model implements JsonSerializable
 
     /**
      * Returns a full `<a>` tag for this link.
+     *
+     * @param array<string, mixed> $attributes
      */
     public function getLink(array $attributes = []): ?Markup
     {
@@ -177,6 +180,8 @@ class Link extends Model implements JsonSerializable
 
     /**
      * Returns the link type-specific settings schema for the field settings UI.
+     *
+     * @return array<string, mixed>
      */
     public static function settingsSchema(): array
     {
@@ -185,6 +190,8 @@ class Link extends Model implements JsonSerializable
 
     /**
      * Returns the input HTML for this link type in the field.
+     *
+     * @param array<string, mixed> $fieldSettings
      */
     public function getInputHtml(string $namePrefix, array $fieldSettings = []): string
     {
@@ -205,6 +212,10 @@ class Link extends Model implements JsonSerializable
 
     /**
      * Serialize this link to an array for JSON storage.
+     *
+     * @param string[] $fields
+     * @param string[] $expand
+     * @return array<string, mixed>
      */
     public function toArray(array $fields = [], array $expand = [], $recursive = true): array
     {
@@ -228,6 +239,8 @@ class Link extends Model implements JsonSerializable
     /**
      * Returns resolved values for API/JSON output (Element API, json_encode).
      * Distinct from toArray() which returns raw storage data.
+     *
+     * @return array<string, mixed>
      */
     public function toApiArray(): array
     {

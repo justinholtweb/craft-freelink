@@ -19,6 +19,8 @@ class FreeLinkField extends Field
     /**
      * Configured link types. Array of type handle => type config:
      * ['enabled' => bool, 'label' => string, 'sources' => string|array, 'sortOrder' => int]
+     *
+     * @var array<string, array<string, mixed>>
      */
     public array $linkTypes = [];
 
@@ -43,6 +45,9 @@ class FreeLinkField extends Field
         return 'link';
     }
 
+    /**
+     * @return array<string, mixed>|string
+     */
     public function getContentColumnType(): array|string
     {
         return 'text';
@@ -75,6 +80,8 @@ class FreeLinkField extends Field
 
     /**
      * Returns the enabled link type handles in configured sort order.
+     *
+     * @return string[]
      */
     public function getEnabledTypeHandles(): array
     {
@@ -305,6 +312,9 @@ class FreeLinkField extends Field
 
     // region Validation
 
+    /**
+     * @return array<int, mixed>
+     */
     public function getElementValidationRules(): array
     {
         $rules = parent::getElementValidationRules();
@@ -369,6 +379,9 @@ class FreeLinkField extends Field
 
     // region GraphQL
 
+    /**
+     * @return \GraphQL\Type\Definition\Type|array<string, mixed>
+     */
     public function getContentGqlType(): \GraphQL\Type\Definition\Type|array
     {
         return \justinholtweb\freelink\gql\types\generators\LinkTypeGenerator::generateType($this);

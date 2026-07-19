@@ -55,6 +55,11 @@ class Email extends Link
         return $rules;
     }
 
+    /**
+     * @param string[] $fields
+     * @param string[] $expand
+     * @return array<string, mixed>
+     */
     public function toArray(array $fields = [], array $expand = [], $recursive = true): array
     {
         $data = parent::toArray($fields, $expand, $recursive);
@@ -63,6 +68,9 @@ class Email extends Link
         return $data;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function toApiArray(): array
     {
         $data = parent::toApiArray();

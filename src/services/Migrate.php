@@ -40,6 +40,8 @@ class Migrate extends Component
 
     /**
      * Runs a migration from the given source plugin.
+     *
+     * @return array<string, mixed>
      */
     public function runMigration(string $source, ?string $fieldHandle = null, bool $dryRun = false, bool $backup = false): array
     {
@@ -72,6 +74,8 @@ class Migrate extends Component
 
     /**
      * Returns the status of all migrations.
+     *
+     * @return array<int, array<string, mixed>>
      */
     public function getStatus(): array
     {
@@ -84,6 +88,8 @@ class Migrate extends Component
 
     /**
      * Returns available migrators with info about whether they have matching fields.
+     *
+     * @return array<string, array<string, mixed>>
      */
     public function getAvailableMigrations(): array
     {

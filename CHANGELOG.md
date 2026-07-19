@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.1.1 - 2026-07-19
+
+### Fixed
+- Fixed a fatal error when running any built-in migration (Hyper, Linkit, Typed Link Field, or Craft's native Link field). The migration runner read each source field record with object syntax when the records are arrays, so it errored before migrating anything.
+- Fixed the Site link type erroring when the target site has no base URL configured; it now resolves to no URL instead of failing.
+
 ## 5.1.0 - 2026-07-07
 
 ### Added

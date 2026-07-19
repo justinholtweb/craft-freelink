@@ -15,7 +15,7 @@ class Relations extends Component
     /**
      * Returns element link rows for a given field + owner.
      *
-     * @return array<int, array> Keyed by sortOrder
+     * @return array<int, array{targetId: int|null, targetSiteId: int|null}> Keyed by sortOrder
      */
     public function getRelations(int $fieldId, int $ownerId, int $ownerSiteId): array
     {
@@ -45,7 +45,7 @@ class Relations extends Component
      * Saves element link relations for a field + owner.
      * Replaces all existing rows for this field/owner/site combination.
      *
-     * @param array $relations Array of ['sortOrder' => int, 'targetId' => int, 'targetSiteId' => int|null]
+     * @param array<int, array<string, mixed>> $relations Array of ['sortOrder' => int, 'targetId' => int, 'targetSiteId' => int|null]
      */
     public function saveRelations(int $fieldId, int $ownerId, int $ownerSiteId, array $relations): void
     {
@@ -109,6 +109,8 @@ class Relations extends Component
 
     /**
      * Returns all relations for a field (used for reverse lookups).
+     *
+     * @return array<int, array<string, mixed>>
      */
     public function getRelatedOwners(int $targetId, ?int $fieldId = null): array
     {

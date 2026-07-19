@@ -17,6 +17,9 @@ use Twig\Markup;
  * Implements a transparent proxy pattern: in single-link mode,
  * magic methods delegate to the first link. In multi-link mode,
  * the collection is iterable.
+ *
+ * @implements IteratorAggregate<int, Link>
+ * @implements ArrayAccess<int, Link>
  */
 class LinkCollection implements IteratorAggregate, Countable, ArrayAccess, Stringable, JsonSerializable
 {
@@ -109,6 +112,9 @@ class LinkCollection implements IteratorAggregate, Countable, ArrayAccess, Strin
         return $this->getFirst()?->getText();
     }
 
+    /**
+     * @param array<string, mixed> $attributes
+     */
     public function getLink(array $attributes = []): ?Markup
     {
         return $this->getFirst()?->getLink($attributes);
@@ -166,6 +172,9 @@ class LinkCollection implements IteratorAggregate, Countable, ArrayAccess, Strin
         return isset($first->$name);
     }
 
+    /**
+     * @param list<mixed> $arguments
+     */
     public function __call(string $name, array $arguments): mixed
     {
         $first = $this->getFirst();
@@ -181,6 +190,9 @@ class LinkCollection implements IteratorAggregate, Countable, ArrayAccess, Strin
 
     // region IteratorAggregate
 
+    /**
+     * @return ArrayIterator<int, Link>
+     */
     public function getIterator(): ArrayIterator
     {
         return new ArrayIterator($this->links);

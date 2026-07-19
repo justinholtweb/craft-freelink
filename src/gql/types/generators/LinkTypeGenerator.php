@@ -12,6 +12,8 @@ class LinkTypeGenerator
     /**
      * Generates the GraphQL type for a FreeLink field.
      * Returns a list type (always an array of FreeLinkInterface).
+     *
+     * @return Type|array<string, mixed>
      */
     public static function generateType(FreeLinkField $field): Type|array
     {

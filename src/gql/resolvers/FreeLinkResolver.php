@@ -8,6 +8,9 @@ use justinholtweb\freelink\models\LinkCollection;
 
 class FreeLinkResolver extends Resolver
 {
+    /**
+     * @param array<string, mixed> $arguments
+     */
     public static function resolve(mixed $source, array $arguments, mixed $context, ResolveInfo $resolveInfo): mixed
     {
         $fieldName = $resolveInfo->fieldName;

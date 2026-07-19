@@ -25,6 +25,9 @@ class Plugin extends BasePlugin
 {
     public string $schemaVersion = '1.0.0';
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function config(): array
     {
         return [

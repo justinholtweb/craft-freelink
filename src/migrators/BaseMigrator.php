@@ -14,6 +14,7 @@ use justinholtweb\freelink\Plugin;
 abstract class BaseMigrator
 {
     protected bool $dryRun = false;
+    /** @var string[] */
     protected array $log = [];
     protected ?string $fieldHandle = null;
 
@@ -50,17 +51,17 @@ abstract class BaseMigrator
         $this->log('Found ' . count($fields) . ' field(s) to migrate.');
 
         foreach ($fields as $field) {
-            $this->_logMigrationStatus($field->id, 'running');
+            $this->_logMigrationStatus((int)$field['id'], 'running');
             $success = $this->migrateField($field);
 
             if (!$success) {
-                $this->_logMigrationStatus($field->id, 'failed');
-                $this->log("Failed to migrate field: {$field->handle}");
+                $this->_logMigrationStatus((int)$field['id'], 'failed');
+                $this->log("Failed to migrate field: {$field['handle']}");
                 return false;
             }
 
-            $this->_logMigrationStatus($field->id, 'complete');
-            $this->log("Successfully migrated field: {$field->handle}");
+            $this->_logMigrationStatus((int)$field['id'], 'complete');
+            $this->log("Successfully migrated field: {$field['handle']}");
         }
 
         $this->log('Migration complete.');
@@ -69,8 +70,10 @@ abstract class BaseMigrator
 
     /**
      * Migrates a single field from the source plugin to FreeLink.
+     *
+     * @param array<string, mixed> $field A row from the `fields` table.
      */
-    abstract protected function migrateField(object $field): bool;
+    abstract protected function migrateField(array $field): bool;
 
     /**
      * Maps source link type class/handle to FreeLink handle.
@@ -79,6 +82,8 @@ abstract class BaseMigrator
 
     /**
      * Returns source fields to migrate.
+     *
+     * @return array<int, array<string, mixed>>
      */
     protected function getSourceFields(): array
     {
@@ -96,6 +101,8 @@ abstract class BaseMigrator
 
     /**
      * Updates a field's type to FreeLinkField and saves new settings.
+     *
+     * @param array<string, mixed> $newSettings
      */
     protected function convertFieldType(int $fieldId, array $newSettings): bool
     {
@@ -157,6 +164,9 @@ abstract class BaseMigrator
         Craft::info($message, 'freelink-migration');
     }
 
+    /**
+     * @return string[]
+     */
     public function getLog(): array
     {
         return $this->log;

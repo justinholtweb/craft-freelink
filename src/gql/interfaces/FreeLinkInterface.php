@@ -35,6 +35,9 @@ class FreeLinkInterface
         return $type;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function getFieldDefinitions(): array
     {
         return [

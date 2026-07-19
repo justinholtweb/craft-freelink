@@ -39,7 +39,13 @@ class Site extends Link
             $site = Craft::$app->getSites()->getCurrentSite();
         }
 
-        return rtrim($site->getBaseUrl(), '/') . '/' . ltrim($this->value, '/');
+        $baseUrl = $site->getBaseUrl();
+
+        if ($baseUrl === null) {
+            return null;
+        }
+
+        return rtrim($baseUrl, '/') . '/' . ltrim($this->value, '/');
     }
 
     public function getText(): ?string
@@ -47,6 +53,11 @@ class Site extends Link
         return $this->label ?? $this->value;
     }
 
+    /**
+     * @param string[] $fields
+     * @param string[] $expand
+     * @return array<string, mixed>
+     */
     public function toArray(array $fields = [], array $expand = [], $recursive = true): array
     {
         $data = parent::toArray($fields, $expand, $recursive);

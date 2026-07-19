@@ -30,6 +30,8 @@ class FreeLinkVariable
      * Returns elements that link to the given element via FreeLink fields.
      *
      * Usage: `craft.freelink.getRelatedElements(entry, 'myLinkField')`
+     *
+     * @return \craft\base\ElementInterface[]
      */
     public function getRelatedElements(ElementInterface $target, ?string $fieldHandle = null): array
     {

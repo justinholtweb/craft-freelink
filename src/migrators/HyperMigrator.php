@@ -40,7 +40,7 @@ class HyperMigrator extends BaseMigrator
         return self::TYPE_MAP[$sourceType] ?? null;
     }
 
-    protected function migrateField(object $field): bool
+    protected function migrateField(array $field): bool
     {
         $this->log("Migrating Hyper field: {$field['handle']} (ID: {$field['id']})");
 
@@ -58,6 +58,10 @@ class HyperMigrator extends BaseMigrator
         return true;
     }
 
+    /**
+     * @param array<string, mixed> $hyperSettings
+     * @return array<string, mixed>
+     */
     private function convertSettings(array $hyperSettings): array
     {
         $linkTypes = [];

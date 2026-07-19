@@ -37,7 +37,7 @@ class CraftLinkMigrator extends BaseMigrator
         return self::TYPE_MAP[$sourceType] ?? null;
     }
 
-    protected function migrateField(object $field): bool
+    protected function migrateField(array $field): bool
     {
         $this->log("Migrating Craft Link field: {$field['handle']} (ID: {$field['id']})");
 
@@ -50,6 +50,10 @@ class CraftLinkMigrator extends BaseMigrator
         return true;
     }
 
+    /**
+     * @param array<string, mixed> $craftSettings
+     * @return array<string, mixed>
+     */
     private function convertSettings(array $craftSettings): array
     {
         $linkTypes = [];
@@ -88,7 +92,7 @@ class CraftLinkMigrator extends BaseMigrator
             'showLabel' => $craftSettings['showLabelField'] ?? true,
             'showNewWindow' => $craftSettings['showTargetField'] ?? true,
             'showAdvanced' => $showAdvanced,
-            'defaultLinkType' => array_key_first($linkTypes) ?? 'url',
+            'defaultLinkType' => array_key_first($linkTypes),
             'defaultNewWindow' => false,
         ];
     }

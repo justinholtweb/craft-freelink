@@ -39,6 +39,9 @@ class MigrateController extends Controller
         return $options;
     }
 
+    /**
+     * @return array<string, string>
+     */
     public function optionAliases(): array
     {
         return [

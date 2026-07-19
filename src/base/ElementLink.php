@@ -15,6 +15,8 @@ class ElementLink extends Link
 
     /**
      * Allowed element sources. '*' = all.
+     *
+     * @var string|string[]
      */
     public string|array $sources = '*';
 
@@ -96,6 +98,8 @@ class ElementLink extends Link
 
     /**
      * Returns the input HTML for element selection.
+     *
+     * @param array<string, mixed> $fieldSettings
      */
     public function getInputHtml(string $namePrefix, array $fieldSettings = []): string
     {
@@ -125,6 +129,11 @@ class ElementLink extends Link
         ]);
     }
 
+    /**
+     * @param string[] $fields
+     * @param string[] $expand
+     * @return array<string, mixed>
+     */
     public function toArray(array $fields = [], array $expand = [], $recursive = true): array
     {
         $data = parent::toArray($fields, $expand, $recursive);
@@ -134,6 +143,9 @@ class ElementLink extends Link
         return $data;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function toApiArray(): array
     {
         $data = parent::toApiArray();

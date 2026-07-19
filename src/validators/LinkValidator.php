@@ -47,7 +47,7 @@ class LinkValidator extends Validator
         }
     }
 
-    protected function validateLink($model, string $attribute, Link $link, int $index): void
+    protected function validateLink(\yii\base\Model $model, string $attribute, Link $link, int $index): void
     {
         // Required label check
         if ($this->requireLabel && empty($link->label)) {
