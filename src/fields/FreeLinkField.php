@@ -167,6 +167,12 @@ class FreeLinkField extends Field
                 }
             }
 
+            // Custom attributes are an Advanced setting. With Advanced off the editor can't see them,
+            // so whatever is stored or posted is not theirs to render.
+            if (!$this->showAdvanced) {
+                $linkData['customAttributes'] = [];
+            }
+
             $link = $linksService->createLink($linkData);
 
             if ($link) {

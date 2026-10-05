@@ -5,8 +5,9 @@ namespace justinholtweb\freelink\base;
 use Craft;
 use craft\helpers\Html;
 use craft\helpers\Template;
-use Twig\Markup;
 use JsonSerializable;
+use justinholtweb\freelink\helpers\UrlSafety;
+use Twig\Markup;
 use yii\base\Model;
 
 /**
@@ -61,6 +62,17 @@ class Link extends Model implements JsonSerializable
             return null;
         }
 
+        $url = $this->getRawUrl();
+
+        // A script-running URL never leaves the model, whatever wrote it. See UrlSafety.
+        return UrlSafety::isUnsafeUrl($url) ? null : $url;
+    }
+
+    /**
+     * The URL as stored, suffix applied, before the safety check in getUrl().
+     */
+    protected function getRawUrl(): ?string
+    {
         $url = $this->getBaseUrl();
 
         if ($url !== null && $this->urlSuffix) {
@@ -68,6 +80,56 @@ class Link extends Model implements JsonSerializable
         }
 
         return $url;
+    }
+
+    public function rules(): array
+    {
+        $rules = parent::rules();
+        $rules[] = ['value', 'validateSafeUrl', 'skipOnEmpty' => true];
+        $rules[] = ['customAttributes', 'validateCustomAttributes', 'skipOnEmpty' => true];
+
+        return $rules;
+    }
+
+    public function validateSafeUrl(string $attribute): void
+    {
+        // Element links resolve their URL from the element, which an editor doesn't type.
+        if (!$this->isElement() && UrlSafety::isUnsafeUrl($this->getRawUrl())) {
+            $this->addError($attribute, Craft::t('freelink', 'Links can’t use javascript:, vbscript: or data: URLs.'));
+        }
+    }
+
+    public function validateCustomAttributes(string $attribute): void
+    {
+        foreach ($this->customAttributes as $attr) {
+            $name = $attr['attribute'] ?? '';
+
+            if ($name !== '' && !UrlSafety::isSafeAttributeName($name)) {
+                $this->addError($attribute, Craft::t('freelink', '“{name}” can’t be used as a custom attribute.', [
+                    'name' => is_string($name) ? $name : '',
+                ]));
+            }
+        }
+    }
+
+    /**
+     * Custom attributes that are safe to render; anything else is dropped silently.
+     *
+     * @return array<string, string>
+     */
+    public function getSafeCustomAttributes(): array
+    {
+        $safe = [];
+
+        foreach ($this->customAttributes as $attr) {
+            $name = $attr['attribute'] ?? '';
+
+            if ($name !== '' && UrlSafety::isSafeAttributeName($name)) {
+                $safe[$name] = (string)($attr['value'] ?? '');
+            }
+        }
+
+        return $safe;
     }
 
     /**
@@ -155,12 +217,9 @@ class Link extends Model implements JsonSerializable
             $defaultAttrs['id'] = $this->id;
         }
 
-        // Add custom attributes
-        foreach ($this->customAttributes as $attr) {
-            if (!empty($attr['attribute'])) {
-                $defaultAttrs[$attr['attribute']] = $attr['value'] ?? '';
-            }
-        }
+        // Add custom attributes. They never replace the attributes above: an editor's `href`,
+        // `target` or `rel` would otherwise undo the checks on them.
+        $defaultAttrs += $this->getSafeCustomAttributes();
 
         // Merge with passed attributes (passed attrs take precedence)
         $attrs = array_merge($defaultAttrs, $attributes);

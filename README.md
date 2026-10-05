@@ -39,7 +39,7 @@ Add a FreeLink field in **Settings > Fields**. The settings UI lets you:
 | Email | `email` | Email address (outputs `mailto:` links) |
 | Phone | `phone` | Phone number (outputs `tel:` links) |
 | SMS | `sms` | Phone number (outputs `sms:` links) |
-| Custom | `custom` | Arbitrary value, no validation |
+| Custom | `custom` | Any value except a script URL (`javascript:`, `vbscript:`, `data:`; `javascript:void(0)` is allowed) |
 | Site | `site` | Relative path resolved against a site's base URL |
 | Entry | `entry` | Craft entry element |
 | Asset | `asset` | Craft asset element |
@@ -85,6 +85,13 @@ The field value is a `LinkCollection` that transparently proxies to the first li
 {{ entry.myLink.classes }}
 {{ entry.myLink.urlSuffix }}
 ```
+
+Editors can't make a link run script. A `javascript:`, `vbscript:` or `data:` URL fails
+validation, and one already stored renders with no URL. Custom attribute names must be plain
+names (`data-*`, `aria-*`, `hreflang`…), never an event handler (`on…`) or one that sets a URL
+(`href`, `src`, `formaction`). They can't replace an attribute the link sets itself, such as
+`target` or `rel`. They render only while the field's **Show Advanced** setting is on. Attributes
+passed to `link({…})` in a template are yours and aren't checked.
 
 ### Multi-Link Mode
 

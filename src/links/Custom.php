@@ -18,6 +18,6 @@ class Custom extends Link
 
     public static function inputPlaceholder(): string
     {
-        return '/path or javascript:void(0)';
+        return '/path, #anchor or javascript:void(0)';
     }
 }

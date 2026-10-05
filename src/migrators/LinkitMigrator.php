@@ -2,7 +2,6 @@
 
 namespace justinholtweb\freelink\migrators;
 
-use Craft;
 use craft\db\Query;
 use craft\helpers\Json;
 

@@ -3,7 +3,6 @@
 namespace justinholtweb\freelink\gql\interfaces;
 
 use craft\gql\GqlEntityRegistry;
-use craft\gql\interfaces\Element as ElementInterface;
 use GraphQL\Type\Definition\InterfaceType;
 use GraphQL\Type\Definition\Type;
 use justinholtweb\freelink\gql\types\LinkType;

@@ -3,12 +3,12 @@
 namespace justinholtweb\freelink\models;
 
 use ArrayAccess;
+use ArrayIterator;
 use Countable;
 use IteratorAggregate;
-use ArrayIterator;
 use JsonSerializable;
-use Stringable;
 use justinholtweb\freelink\base\Link;
+use Stringable;
 use Twig\Markup;
 
 /**

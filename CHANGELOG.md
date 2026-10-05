@@ -1,5 +1,22 @@
 # Changelog
 
+## 5.1.2 - 2026-10-05
+
+> {warning} Links now refuse to render script. If a Custom link of yours used a `javascript:` URL
+> other than `javascript:void(0)` or `javascript:;`, or a custom attribute named `on…`, it now
+> renders with no URL, or without that attribute. Custom attributes no longer render on fields with
+> **Show Advanced** off, and no longer replace an attribute the link sets itself (`target`, `rel`,
+> `class`, `id`…).
+
+### Security
+- Anybody who could edit an entry could save a Custom link to `javascript:…`, or a custom attribute
+  such as `onmouseover`, and `link` rendered it into the page. Links with a `javascript:`,
+  `vbscript:` or `data:` URL now fail validation, and any that are already stored render with no
+  URL. Custom attribute names are checked the same way on save and on render. `javascript:void(0)`
+  and `javascript:;` are still allowed.
+- Custom attributes rendered even when the field's **Show Advanced** setting was off, where editors
+  couldn't see them. They're now ignored there.
+
 ## 5.1.1 - 2026-07-19
 
 ### Fixed
