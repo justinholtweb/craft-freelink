@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 5.2.0 - 2026-10-09
 ### Added
 - Each element link type (Entry, Asset, Category, User, Product, Variant) now has a selection
   condition in the field settings. It uses the same condition builder as Craft's relation fields.
