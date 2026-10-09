@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Each element link type (Entry, Asset, Category, User, Product, Variant) now has a selection
+  condition in the field settings. It uses the same condition builder as Craft's relation fields.
+  The condition filters the element select modal, and it is checked again on save. A link to an
+  element that doesn't match is refused, including an element ID posted straight to the form.
+
+### Fixed
+- Custom link type labels set in the field settings now show in the link type menu. Before this,
+  the menu always used the type's default name.
+- Element sources saved as a list are now stored as a list. Before this, they were saved as one
+  comma-joined string that the element select modal couldn't use.
+- The "Allow multiple links" switch in the field settings now shows and hides the Min/Max Links
+  inputs. Before this, its script looked for an input name and an element ID that Craft's field
+  settings had namespaced, so it never found them.
+
 ## 5.1.2 - 2026-10-05
 
 > {warning} Links now refuse to render script. If a Custom link of yours used a `javascript:` URL

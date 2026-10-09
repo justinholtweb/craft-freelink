@@ -6,7 +6,11 @@ use Craft;
 use craft\base\Element;
 use craft\base\ElementInterface;
 use craft\base\Field;
+use craft\elements\conditions\ElementCondition;
+use craft\elements\conditions\ElementConditionInterface;
+use craft\helpers\Cp;
 use craft\helpers\Json;
+use craft\helpers\StringHelper;
 use justinholtweb\freelink\base\ElementLink;
 use justinholtweb\freelink\base\Link;
 use justinholtweb\freelink\models\LinkCollection;
@@ -18,7 +22,8 @@ class FreeLinkField extends Field
 
     /**
      * Configured link types. Array of type handle => type config:
-     * ['enabled' => bool, 'label' => string, 'sources' => string|array, 'sortOrder' => int]
+     * ['enabled' => bool, 'label' => string, 'sources' => string|array, 'sortOrder' => int,
+     *  'selectionCondition' => array (element types only, an element condition config)]
      *
      * @var array<string, array<string, mixed>>
      */
@@ -32,6 +37,15 @@ class FreeLinkField extends Field
     public bool $showAdvanced = false;
     public string $defaultLinkType = 'url';
     public bool $defaultNewWindow = false;
+
+    /**
+     * Selection conditions built from `linkTypes[*][selectionCondition]`, keyed by type handle + config.
+     * Built lazily: creating a condition can load every field, and a field rule in one of these
+     * conditions would otherwise recurse back here while the fields are being loaded.
+     *
+     * @var array<string, ElementConditionInterface|null>
+     */
+    private array $_selectionConditions = [];
 
     // endregion
 
@@ -62,13 +76,17 @@ class FreeLinkField extends Field
 
         $typeOptions = [];
         foreach ($availableTypes as $handle => $class) {
+            $isElement = is_subclass_of($class, ElementLink::class);
+            $sources = $this->linkTypes[$handle]['sources'] ?? '*';
+
             $typeOptions[] = [
                 'handle' => $handle,
                 'label' => $class::displayName(),
-                'isElement' => is_subclass_of($class, ElementLink::class),
+                'isElement' => $isElement,
                 'enabled' => $this->linkTypes[$handle]['enabled'] ?? ($handle === 'url'),
                 'customLabel' => $this->linkTypes[$handle]['label'] ?? '',
-                'sources' => $this->linkTypes[$handle]['sources'] ?? '*',
+                'sources' => $this->normalizeSources($sources),
+                'selectionConditionHtml' => $isElement ? $this->selectionConditionBuilderHtml($handle) : null,
             ];
         }
 
@@ -76,6 +94,157 @@ class FreeLinkField extends Field
             'field' => $this,
             'typeOptions' => $typeOptions,
         ]);
+    }
+
+    /**
+     * Field settings as they go to project config. Selection conditions are stored as their config
+     * (what the condition builder posts is a builder payload, not a config), and dropped when they
+     * have no rules.
+     *
+     * @return array<string, mixed>
+     */
+    public function getSettings(): array
+    {
+        $settings = parent::getSettings();
+        $linkTypes = [];
+
+        foreach ($this->linkTypes as $handle => $config) {
+            if (!is_array($config)) {
+                continue;
+            }
+
+            if (isset($config['sources'])) {
+                $config['sources'] = $this->normalizeSources($config['sources']);
+            }
+
+            unset($config['selectionCondition']);
+            $condition = $this->getSelectionCondition((string)$handle);
+            if ($condition) {
+                $config['selectionCondition'] = $condition->getConfig();
+            }
+
+            $linkTypes[$handle] = $config;
+        }
+
+        $settings['linkTypes'] = $linkTypes;
+
+        return $settings;
+    }
+
+    /**
+     * Returns the condition an element link type's selected element has to match, or null when the
+     * type has none (or isn't an element link type).
+     *
+     * The condition narrows the element select modal and is enforced again when the owner is saved.
+     */
+    public function getSelectionCondition(string $handle): ?ElementConditionInterface
+    {
+        $config = $this->linkTypes[$handle]['selectionCondition'] ?? null;
+
+        // Keyed on the config too, so a changed setting is never answered from the old condition.
+        $key = $handle . ':' . ($config instanceof ElementConditionInterface ? spl_object_id($config) : md5((string)json_encode($config)));
+        if (array_key_exists($key, $this->_selectionConditions)) {
+            return $this->_selectionConditions[$key];
+        }
+
+        $condition = null;
+        $elementType = $this->elementTypeFor($handle);
+
+        if ($elementType && $config) {
+            try {
+                if ($config instanceof ElementConditionInterface) {
+                    $created = $config;
+                } else {
+                    /** @var array{class: class-string<ElementConditionInterface>}|class-string<ElementConditionInterface> $config */
+                    $created = Craft::$app->getConditions()->createCondition($config);
+                }
+
+                // Only a condition for this type's own element type counts. Anything else is a
+                // stale or hand-edited config, and applying it would filter on the wrong rules.
+                if (
+                    $created instanceof ElementConditionInterface &&
+                    (!$created instanceof ElementCondition || $created->elementType === null || $created->elementType === $elementType) &&
+                    !empty($created->getConditionRules())
+                ) {
+                    $condition = $created;
+                }
+            } catch (\Throwable $e) {
+                Craft::warning("FreeLink field \"$this->handle\": couldn't build the selection condition for the \"$handle\" link type: {$e->getMessage()}", __METHOD__);
+            }
+        }
+
+        return $this->_selectionConditions[$key] = $condition;
+    }
+
+    /**
+     * The element class an element link type targets, or null for a simple link type.
+     *
+     * @return class-string<ElementInterface>|null
+     */
+    private function elementTypeFor(string $handle): ?string
+    {
+        $class = Plugin::getInstance()->links->getTypeByHandle($handle);
+
+        if (!$class || !is_subclass_of($class, ElementLink::class)) {
+            return null;
+        }
+
+        $elementType = $class::elementType();
+
+        return class_exists($elementType) && is_subclass_of($elementType, ElementInterface::class) ? $elementType : null;
+    }
+
+    /**
+     * The condition builder for an element link type's selection condition, wrapped as a field.
+     */
+    private function selectionConditionBuilderHtml(string $handle): ?string
+    {
+        $elementType = $this->elementTypeFor($handle);
+
+        if (!$elementType) {
+            return null;
+        }
+
+        $condition = $this->getSelectionCondition($handle) ?? $elementType::createCondition();
+        $condition->mainTag = 'div';
+        $condition->id = 'freelink-selection-condition-' . $handle;
+        $condition->name = 'linkTypes[' . $handle . '][selectionCondition]';
+        $condition->forProjectConfig = true;
+        $condition->queryParams[] = 'site';
+
+        return Cp::fieldHtml($condition->getBuilderHtml(), [
+            'label' => Craft::t('freelink', 'Selectable {type} Condition', [
+                'type' => $elementType::pluralDisplayName(),
+            ]),
+            'instructions' => StringHelper::upperCaseFirst(Craft::t('freelink', 'Only allow {type} to be selected if they match the following rules:', [
+                'type' => $elementType::pluralLowerDisplayName(),
+            ])),
+        ]);
+    }
+
+    /**
+     * Sources as the element select modal wants them: `'*'` or a list of source keys.
+     * Settings saved before 5.2 could hold a comma-joined string.
+     *
+     * @return string|string[]
+     */
+    private function normalizeSources(mixed $sources): string|array
+    {
+        if (is_string($sources)) {
+            if ($sources === '' || $sources === '*') {
+                return '*';
+            }
+
+            $sources = explode(',', $sources);
+        }
+
+        if (!is_array($sources)) {
+            return '*';
+        }
+
+        $sources = array_values(array_filter(array_map(fn($source) => trim((string)$source), $sources), fn($source) => $source !== ''));
+
+        return $sources ?: '*';
     }
 
     /**
@@ -270,11 +439,20 @@ class FreeLinkField extends Field
         foreach ($enabledHandles as $handle) {
             $class = $linksService->getTypeByHandle($handle);
             if ($class) {
-                $label = $this->linkTypes[$handle]['customLabel'] ?? $class::displayName();
+                $label = ($this->linkTypes[$handle]['label'] ?? '') ?: $class::displayName();
+                $isElement = is_subclass_of($class, ElementLink::class);
+
+                $condition = $isElement ? $this->getSelectionCondition($handle) : null;
+                if ($condition instanceof ElementCondition) {
+                    $condition->referenceElement = $element;
+                }
+
                 $typeOptions[] = [
                     'handle' => $handle,
                     'label' => $label,
-                    'isElement' => is_subclass_of($class, ElementLink::class),
+                    'isElement' => $isElement,
+                    'sources' => $isElement ? $this->normalizeSources($this->linkTypes[$handle]['sources'] ?? '*') : '*',
+                    'condition' => $condition,
                 ];
             }
         }
@@ -300,6 +478,7 @@ class FreeLinkField extends Field
             'namespacedId' => $namespacedId,
             'name' => $this->handle,
             'field' => $this,
+            'element' => $element,
             'value' => $value,
             'links' => $links,
             'typeOptions' => $typeOptions,
@@ -370,7 +549,7 @@ class FreeLinkField extends Field
         }
 
         // Validate individual links
-        foreach ($value->getAll() as $link) {
+        foreach ($value->getAll() as $index => $link) {
             if (!$link->validate()) {
                 foreach ($link->getErrors() as $attribute => $errors) {
                     foreach ($errors as $error) {
@@ -378,7 +557,53 @@ class FreeLinkField extends Field
                     }
                 }
             }
+
+            if ($link instanceof ElementLink && !$this->linkMatchesSelectionCondition($link, $element)) {
+                $element->addError($this->handle, Craft::t('freelink', '{attribute}: the {type} chosen for link {num} isn’t allowed here.', [
+                    'attribute' => $this->name,
+                    'type' => mb_strtolower($link::displayName()),
+                    'num' => $index + 1,
+                ]));
+            }
         }
+    }
+
+    /**
+     * Whether an element link's target matches its type's selection condition.
+     *
+     * The modal only narrows what an editor is offered. A POST can name any element ID, so the
+     * condition is checked again here against the element itself.
+     */
+    public function linkMatchesSelectionCondition(ElementLink $link, ?ElementInterface $owner = null): bool
+    {
+        if (!$link->targetId) {
+            return true;
+        }
+
+        $condition = $this->getSelectionCondition($link->type ?: $link::handle());
+
+        if (!$condition) {
+            return true;
+        }
+
+        $target = $link->getElement();
+
+        if (!$target && !$link->targetSiteId && $owner?->siteId) {
+            // No site recorded and nothing in the current one: look in the owner's site.
+            $elementType = $link::elementType();
+            $target = $elementType::find()->id($link->targetId)->siteId($owner->siteId)->status(null)->one();
+        }
+
+        if (!$target) {
+            // A target that doesn't exist can't match. Saving would only store a dead link.
+            return false;
+        }
+
+        if ($condition instanceof ElementCondition) {
+            $condition->referenceElement = $owner;
+        }
+
+        return $condition->matchElement($target);
     }
 
     // endregion

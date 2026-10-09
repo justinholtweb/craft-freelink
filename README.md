@@ -27,6 +27,7 @@ php craft plugin/install freelink
 Add a FreeLink field in **Settings > Fields**. The settings UI lets you:
 
 - Enable/disable individual link types and set custom labels
+- Limit which elements each element link type can link to, with a selection condition
 - Toggle between single-link and multi-link modes (with min/max constraints)
 - Show/hide the link text field, new window toggle, and advanced attributes
 - Set default link type and default new window behavior
@@ -47,6 +48,24 @@ Add a FreeLink field in **Settings > Fields**. The settings UI lets you:
 | User | `user` | Craft user element |
 | Product | `product` | Commerce product (requires Commerce) |
 | Variant | `variant` | Commerce variant (requires Commerce) |
+
+### Selection conditions
+
+Each element link type (Entry, Asset, Category, User, Product, Variant) has its own
+**Selectable … Condition** in the field settings. It's the same condition builder Craft's own
+relation fields use. For example, Entry links can be limited to entries of type *Page*, and Product
+links to products that are in stock.
+
+The condition does two things:
+
+- **It filters the element select modal**, so editors are only offered elements that match.
+- **It is checked again when the entry is saved.** A link whose element doesn't match is refused
+  with a validation error. This covers links that were chosen before the condition was added, and
+  element IDs posted directly. Like Craft's own field validation, this check runs on live saves,
+  not on drafts.
+
+Rules that depend on the entry being edited, such as "related to the current entry", are given that
+entry as their reference element. Fields with no condition behave as they did before.
 
 ## Twig Usage
 

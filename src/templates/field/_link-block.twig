@@ -44,13 +44,15 @@
                             {% set selectedElements = [link.getElement()] %}
                         {% endif %}
 
-                        {% set sources = field.linkTypes[typeOpt.handle].sources ?? '*' %}
+                        {% set sources = typeOpt.sources ?? '*' %}
 
                         {{ craft.app.view.renderTemplate('_includes/forms/elementSelect', {
                             name: namePrefix ~ '[elements][' ~ typeOpt.handle ~ ']',
                             elementType: elClass,
                             elements: selectedElements,
                             sources: sources != '*' ? sources : null,
+                            condition: typeOpt.condition ?? null,
+                            referenceElement: element ?? null,
                             limit: 1,
                             modalStorageKey: 'freelink.' ~ typeOpt.handle,
                         })|raw }}

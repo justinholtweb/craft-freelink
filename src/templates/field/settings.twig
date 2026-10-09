@@ -39,11 +39,24 @@
                        title="{{ 'Custom label (optional)'|t('freelink') }}">
 
                 {% if typeOpt.isElement %}
-                    <input type="hidden"
-                           name="linkTypes[{{ typeOpt.handle }}][sources]"
-                           value="{{ typeOpt.sources is iterable ? typeOpt.sources|join(',') : typeOpt.sources }}">
+                    {% if typeOpt.sources is iterable %}
+                        {% for source in typeOpt.sources %}
+                            <input type="hidden" name="linkTypes[{{ typeOpt.handle }}][sources][]" value="{{ source }}">
+                        {% endfor %}
+                    {% else %}
+                        <input type="hidden" name="linkTypes[{{ typeOpt.handle }}][sources]" value="{{ typeOpt.sources }}">
+                    {% endif %}
                 {% endif %}
             </div>
+
+            {# Which elements this type may link to. Hidden while the type is off. #}
+            {% if typeOpt.selectionConditionHtml %}
+                <div class="freelink-selection-condition {{ not typeOpt.enabled ? 'hidden' }}"
+                     data-freelink-condition-for="{{ typeOpt.handle }}"
+                     style="margin-left: 58px; margin-top: 8px;">
+                    {{ typeOpt.selectionConditionHtml|raw }}
+                </div>
+            {% endif %}
         </div>
     {% endfor %}
 </div>
@@ -135,8 +148,8 @@
 
 {% js %}
     (function() {
-        var $multiToggle = $('[name="multipleLinks"]').closest('.lightswitch');
-        var $multiSettings = $('#freelink-multi-settings');
+        var $multiToggle = $('[name="multipleLinks"], [name$="[multipleLinks]"]').closest('.lightswitch');
+        var $multiSettings = $('#freelink-multi-settings, [id$="-freelink-multi-settings"]');
 
         if ($multiToggle.length) {
             $multiToggle.on('change', function() {
@@ -144,5 +157,16 @@
                 $multiSettings.toggleClass('hidden', !on);
             });
         }
+
+        // Field settings are namespaced, so ids and names here aren't the ones in the template.
+        // Find each type's lightswitch from its condition's own row instead.
+        $('[data-freelink-condition-for]').each(function() {
+            var $condition = $(this);
+            var $toggle = $condition.parent().children().first().find('.lightswitch').first();
+
+            $toggle.on('change', function() {
+                $condition.toggleClass('hidden', !$(this).data('lightswitch').on);
+            });
+        });
     })();
 {% endjs %}
