@@ -874,10 +874,12 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
             return true;
         }
 
-        // The target site the link resolves on: its own, or the owner's.
-        $targetSiteId = $link->targetSiteId ?: ($owner->siteId ? (int)$owner->siteId : null);
+        // Check the copy the link will resolve to (see ElementLink::resolvedSiteId()).
+        if (!$link->ownerSiteId && $owner->siteId) {
+            $link->ownerSiteId = (int)$owner->siteId;
+        }
 
-        if (GqlScope::isActive() && !GqlScope::canQuery((int)$link->targetId, $targetSiteId)) {
+        if (GqlScope::isActive() && !GqlScope::canQuery((int)$link->targetId, $link->resolvedSiteId())) {
             return false;
         }
 
@@ -891,12 +893,8 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
             return true;
         }
 
+        // The copy the link resolves to: if there is none, there is nothing the user may see.
         $target = $link->getElement();
-
-        if (!$target) {
-            $elementType = $link::elementType();
-            $target = $elementType::find()->id($link->targetId)->site('*')->unique()->status(null)->one();
-        }
 
         return $target !== null && Craft::$app->getElements()->canView($target, $user);
     }

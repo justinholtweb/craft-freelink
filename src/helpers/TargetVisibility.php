@@ -23,10 +23,8 @@ class TargetVisibility
         }
 
         if (GqlScope::isActive()) {
-            // On the link's target site, or else the site of the element holding it.
-            $siteId = $link->targetSiteId ?: $link->ownerSiteId;
-
-            return GqlScope::canQuery((int)$link->targetId, $siteId ? (int)$siteId : null);
+            // On the same site getElement() resolves the target on.
+            return GqlScope::canQuery((int)$link->targetId, $link->resolvedSiteId());
         }
 
         try {

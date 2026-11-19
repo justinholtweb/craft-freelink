@@ -43,7 +43,31 @@ class ElementLink extends Link
     }
 
     /**
-     * Lazy-loads and returns the linked element.
+     * The site this link's target resolves on: its own target site, else the site of the element
+     * holding the link, else (a link not loaded through a field) the current site.
+     *
+     * Everything that loads the target or checks whether it may be shown uses this, so the copy
+     * that is checked is always the copy that is rendered.
+     */
+    public function resolvedSiteId(): ?int
+    {
+        if ($this->targetSiteId) {
+            return $this->targetSiteId;
+        }
+
+        if ($this->ownerSiteId) {
+            return $this->ownerSiteId;
+        }
+
+        try {
+            return (int)Craft::$app->getSites()->getCurrentSite()->id;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Lazy-loads and returns the linked element, on resolvedSiteId().
      */
     public function getElement(): ?ElementInterface
     {
@@ -56,8 +80,9 @@ class ElementLink extends Link
                     ->id($this->targetId)
                     ->status(null);
 
-                if ($this->targetSiteId) {
-                    $query->siteId($this->targetSiteId);
+                $siteId = $this->resolvedSiteId();
+                if ($siteId) {
+                    $query->siteId($siteId);
                 }
 
                 $this->_element = $query->one();

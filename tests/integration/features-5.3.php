@@ -876,6 +876,33 @@ check('GqlScope and TargetVisibility honour the schema’s sites (target site, e
     return $r === [true, false, true, false, true, false, true] ?: json_encode($r);
 });
 
+check('with the current site different from the owner’s, a link without a target site is checked and rendered on the owner’s site', function() use ($gql, $schemaFor, $siteAOnly, $twoSiteTarget, $siteA, $siteB, $sectionUid, $portfolioUid) {
+    if (!$twoSiteTarget) {
+        return 'needs an entry in two sites';
+    }
+    $holder = makeEntry('FL53 owner-site resolution', [], [['type' => 'entry', 'targetId' => $twoSiteTarget->id]]);
+    $sites = Craft::$app->getSites();
+    $previous = $sites->getCurrentSite();
+    $sites->setCurrentSite($siteB);
+    try {
+        $loaded = Entry::find()->id($holder->id)->siteId($siteA->id)->status(null)->one();
+        $link = $loaded->getFieldValue('freelinkItTest')->first();
+        $resolved = $link->resolvedSiteId();
+        $renderedSite = $link->getElement()?->siteId;
+
+        $gql->setActiveSchema($schemaFor($siteAOnly));
+        $seenA = justinholtweb\freelink\helpers\TargetVisibility::canSee($link);
+        $gql->setActiveSchema($schemaFor(["sections.$sectionUid:read", "sections.$portfolioUid:read", "sites.$siteB->uid:read"]));
+        $seenB = justinholtweb\freelink\helpers\TargetVisibility::canSee($link);
+    } finally {
+        $gql->setActiveSchema(null);
+        $sites->setCurrentSite($previous);
+    }
+    // Resolves on A (the owner's site), so a site-A schema may see it and a site-B-only one may not.
+    return $resolved === $siteA->id && $renderedSite === $siteA->id && $seenA && !$seenB
+        ?: json_encode([$resolved, $renderedSite, $seenA, $seenB]);
+});
+
 check('mutation: a link to the target’s copy on a site the schema can’t read is refused; the readable site’s copy saves', function() use ($siteAOnly, $mutationName, $twoSiteTarget, $siteA, $siteB, &$created) {
     if (!$twoSiteTarget) {
         return 'needs an entry in two sites';

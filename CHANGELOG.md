@@ -57,6 +57,11 @@
   "An element you can't view", so saving doesn't drop it.
 
 ### Fixed
+- An element link without a target site now resolves its element on the site of the entry (or other
+  element) it belongs to, not on the current site. Templates that render an element from its own
+  site — nearly always — see no change. A template showing an element loaded from another site
+  (`craft.entries.site('fr')`) now gets that site's copy of the linked element, where before it got
+  the current site's copy.
 - Setting an element link's `targetId` in PHP, GraphQL, Feed Me or MCP on an existing element no
   longer gets replaced by the target stored before. Only a value loaded from the database reads its
   targets from the relations table now.
