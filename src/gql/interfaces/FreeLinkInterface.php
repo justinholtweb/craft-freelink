@@ -5,7 +5,10 @@ namespace justinholtweb\freelink\gql\interfaces;
 use craft\gql\GqlEntityRegistry;
 use GraphQL\Type\Definition\InterfaceType;
 use GraphQL\Type\Definition\Type;
+use justinholtweb\freelink\base\ElementLink;
 use justinholtweb\freelink\gql\types\LinkType;
+use justinholtweb\freelink\links\Email;
+use justinholtweb\freelink\links\Site;
 
 class FreeLinkInterface
 {
@@ -113,6 +116,50 @@ class FreeLinkInterface
                 'resolve' => function($source) {
                     return $source->isEmpty();
                 },
+            ],
+            'icon' => [
+                'name' => 'icon',
+                'type' => Type::string(),
+                'description' => 'The icon name, when the field allows icons.',
+            ],
+            'iconSvg' => [
+                'name' => 'iconSvg',
+                'type' => Type::string(),
+                'description' => 'The icon as inline SVG markup.',
+                'resolve' => function($source) {
+                    $svg = $source->getIconSvg();
+                    return $svg !== null ? (string)$svg : null;
+                },
+            ],
+            'elementId' => [
+                'name' => 'elementId',
+                'type' => Type::int(),
+                'description' => 'The linked element’s ID (element links).',
+                'resolve' => fn($source) => $source instanceof ElementLink ? $source->targetId : null,
+            ],
+            'elementSiteId' => [
+                'name' => 'elementSiteId',
+                'type' => Type::int(),
+                'description' => 'The linked element’s site ID (element links).',
+                'resolve' => fn($source) => $source instanceof ElementLink ? $source->targetSiteId : null,
+            ],
+            'elementType' => [
+                'name' => 'elementType',
+                'type' => Type::string(),
+                'description' => 'The linked element’s class (element links).',
+                'resolve' => fn($source) => $source instanceof ElementLink ? $source::elementType() : null,
+            ],
+            'subject' => [
+                'name' => 'subject',
+                'type' => Type::string(),
+                'description' => 'The subject (email links).',
+                'resolve' => fn($source) => $source instanceof Email ? $source->subject : null,
+            ],
+            'siteId' => [
+                'name' => 'siteId',
+                'type' => Type::int(),
+                'description' => 'The site (site links).',
+                'resolve' => fn($source) => $source instanceof Site ? $source->siteId : null,
             ],
             'isElement' => [
                 'name' => 'isElement',
