@@ -6,6 +6,8 @@ use Craft;
 use craft\base\Element;
 use craft\base\ElementInterface;
 use craft\base\Field;
+use craft\base\InputSchemaFieldInterface;
+use craft\base\McpOutputFieldInterface;
 use craft\elements\conditions\ElementCondition;
 use craft\elements\conditions\ElementConditionInterface;
 use craft\helpers\Cp;
@@ -13,10 +15,16 @@ use craft\helpers\Json;
 use craft\helpers\StringHelper;
 use justinholtweb\freelink\base\ElementLink;
 use justinholtweb\freelink\base\Link;
+use justinholtweb\freelink\gql\GqlScope;
+use justinholtweb\freelink\gql\types\input\LinkInput;
+use justinholtweb\freelink\helpers\Icons;
 use justinholtweb\freelink\models\LinkCollection;
 use justinholtweb\freelink\Plugin;
 
-class FreeLinkField extends Field
+// Craft 5.12+'s MCP field interfaces, declared here when the installed Craft predates them.
+require_once dirname(__DIR__, 2) . '/polyfills/craft-mcp.php';
+
+class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutputFieldInterface
 {
     // region Settings
 
@@ -37,6 +45,15 @@ class FreeLinkField extends Field
     public bool $showAdvanced = false;
     public string $defaultLinkType = 'url';
     public bool $defaultNewWindow = false;
+
+    /** Let editors pick an icon per link (5.3). */
+    public bool $allowIcons = false;
+
+    /**
+     * Offer Font Awesome Pro icons too. Off by default: Craft's Pro icons are licensed for the CP,
+     * and per-link icons render on the front end.
+     */
+    public bool $includeProIcons = false;
 
     /**
      * Selection conditions built from `linkTypes[*][selectionCondition]`, keyed by type handle + config.
@@ -318,6 +335,20 @@ class FreeLinkField extends Field
             // Their presence also marks this as a form submission, in which case
             // the POST is authoritative over the relations table below.
             $isPost = isset($linkData['values']) || isset($linkData['elements']);
+
+            // GraphQL/MCP/PHP input names the target with `targetId` (or `elementId`). Stored JSON
+            // never contains either key, so their presence marks input the same way (an explicit
+            // null clears the target). An element link given without either keeps the target
+            // already stored at its position.
+            if (!array_key_exists('targetId', $linkData) && array_key_exists('elementId', $linkData)) {
+                $linkData['targetId'] = $linkData['elementId'];
+            }
+            if (array_key_exists('targetId', $linkData)) {
+                $isPost = true;
+            }
+            if (isset($linkData['htmlId']) && !isset($linkData['id'])) {
+                $linkData['id'] = $linkData['htmlId'];
+            }
             if (!isset($linkData['value']) && isset($linkData['values']) && is_array($linkData['values'])) {
                 $linkData['value'] = $linkData['values'][$type] ?? null;
             }
@@ -340,6 +371,11 @@ class FreeLinkField extends Field
             // so whatever is stored or posted is not theirs to render.
             if (!$this->showAdvanced) {
                 $linkData['customAttributes'] = [];
+            }
+
+            // Same for icons: a field with icons off has none, whatever was stored before.
+            if (!$this->allowIcons) {
+                unset($linkData['icon']);
             }
 
             $link = $linksService->createLink($linkData);
@@ -401,12 +437,32 @@ class FreeLinkField extends Field
             }
         }
 
+        // A target deleted since the value was loaded (or an ID that never existed, on a save that
+        // skipped validation) would fail the foreign key and abort the whole save. Drop it instead:
+        // the link loads as empty, as it would after the target's deletion anyway.
+        if ($relations) {
+            $existing = array_map('intval', (new \craft\db\Query())
+                ->select(['id'])
+                ->from(\craft\db\Table::ELEMENTS)
+                ->where(['id' => array_column($relations, 'targetId')])
+                ->column());
+            $relations = array_values(array_filter($relations, fn($r) => in_array((int)$r['targetId'], $existing, true)));
+        }
+
         $relationsService = Plugin::getInstance()->relations;
 
         if (!empty($relations)) {
             $relationsService->saveRelations($this->id, $element->id, $siteId, $relations);
         } else {
             $relationsService->deleteRelations($this->id, $element->id, $siteId);
+        }
+
+        // Keep the link index (Links screen, reverse lookups, checks) in step with live content.
+        try {
+            Plugin::getInstance()->linkIndex->indexValue($this, $element, $value);
+        } catch (\Throwable $e) {
+            // The index is derived data; never fail a save over it.
+            Craft::warning("FreeLink couldn't index field \"$this->handle\" on element $element->id: {$e->getMessage()}", __METHOD__);
         }
 
         parent::afterElementSave($element, $isNew);
@@ -548,8 +604,51 @@ class FreeLinkField extends Field
             }
         }
 
+        $enabledTypes = $this->getEnabledTypeHandles();
+
         // Validate individual links
         foreach ($value->getAll() as $index => $link) {
+            $num = $index + 1;
+
+            // The CP only offers enabled types, but a POST, GraphQL or MCP can name any type.
+            if ($enabledTypes && !in_array($link->type, $enabledTypes, true)) {
+                $element->addError($this->handle, Craft::t('freelink', '{attribute}: link {num} uses the “{type}” link type, which this field doesn’t allow.', [
+                    'attribute' => $this->name,
+                    'num' => $num,
+                    'type' => $link->type,
+                ]));
+                continue;
+            }
+
+            if ($link->icon !== null) {
+                if (!$this->allowIcons) {
+                    $link->icon = null;
+                } elseif (!Icons::exists($link->icon, $this->includeProIcons)) {
+                    $element->addError($this->handle, Craft::t('freelink', '{attribute}: the icon for link {num} isn’t available.', [
+                        'attribute' => $this->name,
+                        'num' => $num,
+                    ]));
+                }
+            }
+
+            if ($link instanceof ElementLink && $link->targetId && !$this->linkTargetExists($link, $element)) {
+                $element->addError($this->handle, Craft::t('freelink', '{attribute}: the {type} chosen for link {num} doesn’t exist.', [
+                    'attribute' => $this->name,
+                    'type' => mb_strtolower($link::displayName()),
+                    'num' => $num,
+                ]));
+                continue;
+            }
+
+            if ($link instanceof ElementLink && $link->targetId && !$this->actorMayLinkTo($link, $element)) {
+                $element->addError($this->handle, Craft::t('freelink', '{attribute}: you can’t link to the {type} chosen for link {num}.', [
+                    'attribute' => $this->name,
+                    'type' => mb_strtolower($link::displayName()),
+                    'num' => $num,
+                ]));
+                continue;
+            }
+
             if (!$link->validate()) {
                 foreach ($link->getErrors() as $attribute => $errors) {
                     foreach ($errors as $error) {
@@ -566,6 +665,81 @@ class FreeLinkField extends Field
                 ]));
             }
         }
+    }
+
+    /**
+     * Whether an element link's target exists and is the link type's element type, in any status.
+     */
+    public function linkTargetExists(ElementLink $link, ?ElementInterface $owner = null): bool
+    {
+        if (!$link->targetId) {
+            return true;
+        }
+
+        $elementType = $link::elementType();
+
+        if (!class_exists($elementType) || !is_subclass_of($elementType, ElementInterface::class)) {
+            return false;
+        }
+
+        $query = $elementType::find()->id($link->targetId)->status(null);
+
+        if ($link->targetSiteId) {
+            $query->siteId($link->targetSiteId);
+        } else {
+            $query->site('*')->unique();
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * Whether whoever is saving may point a link at this target.
+     *
+     * Only targets that are new to this field are checked, so an editor can still save content that
+     * links to something someone else chose. A signed-in user (CP, MCP) must be able to view the
+     * target; a GraphQL schema must be able to query it. Otherwise a token or agent could link to an
+     * element it can't see and read its URL and title back from the link.
+     */
+    public function actorMayLinkTo(ElementLink $link, ElementInterface $owner): bool
+    {
+        if (!$link->targetId) {
+            return true;
+        }
+
+        $siteId = (int)($owner->siteId ?? Craft::$app->getSites()->getCurrentSite()->id);
+        $relations = Plugin::getInstance()->relations;
+
+        foreach (array_unique(array_filter([$owner->id, $owner->getCanonicalId()])) as $ownerId) {
+            foreach ($relations->getRelations((int)$this->id, (int)$ownerId, $siteId) as $existing) {
+                if ((int)$existing['targetId'] === (int)$link->targetId) {
+                    return true;
+                }
+            }
+        }
+
+        if (GqlScope::isActive() && !GqlScope::canQuery((int)$link->targetId)) {
+            return false;
+        }
+
+        try {
+            $user = Craft::$app->getUser()->getIdentity();
+        } catch (\Throwable) {
+            $user = null;
+        }
+
+        if (!$user) {
+            return true;
+        }
+
+        $target = $link->getElement();
+
+        if (!$target) {
+            $elementType = $link::elementType();
+            $target = $elementType::find()->id($link->targetId)->site('*')->unique()->status(null)->one();
+        }
+
+        return $target !== null && Craft::$app->getElements()->canView($target, $user);
     }
 
     /**
@@ -616,6 +790,159 @@ class FreeLinkField extends Field
     public function getContentGqlType(): \GraphQL\Type\Definition\Type|array
     {
         return \justinholtweb\freelink\gql\types\generators\LinkTypeGenerator::generateType($this);
+    }
+
+    /**
+     * `FreeLinkInput` (single-link mode) or `[FreeLinkInput]` (multi-link mode). Values go through
+     * normalizeValue() and the same validation as a CP save.
+     *
+     * @return \GraphQL\Type\Definition\Type|array<string, mixed>
+     */
+    public function getContentGqlMutationArgumentType(): \GraphQL\Type\Definition\Type|array
+    {
+        $type = LinkInput::getType();
+
+        return [
+            'name' => $this->handle,
+            'type' => $this->multipleLinks ? \GraphQL\Type\Definition\Type::listOf($type) : $type,
+            'description' => $this->instructions,
+        ];
+    }
+
+    // endregion
+
+    // region MCP (Craft 5.12+)
+
+    /**
+     * JSON schema of the values this field accepts (core MCP element tools). Built from the field's
+     * settings: only enabled link types, only the inputs the field shows.
+     *
+     * @return array<string, mixed>
+     */
+    public function getInputSchema(): array
+    {
+        $links = Plugin::getInstance()->links;
+        $enabled = $this->getEnabledTypeHandles() ?: ['url'];
+        $elementTypes = [];
+
+        foreach ($enabled as $handle) {
+            $class = $links->getTypeByHandle($handle);
+            if ($class && is_subclass_of($class, ElementLink::class)) {
+                $elementTypes[] = $handle;
+            }
+        }
+
+        $nullableString = ['type' => ['string', 'null']];
+        $properties = [
+            'type' => ['type' => 'string', 'enum' => array_values($enabled)],
+            'value' => $nullableString + ['description' => 'URL, email address, phone number, custom value or site path. Omit for element link types.'],
+            'targetId' => ['type' => ['integer', 'null'], 'minimum' => 1, 'description' => 'Element ID for ' . ($elementTypes ? implode('/', $elementTypes) : 'element') . ' links. Omit to keep the target already at this position; null clears it.'],
+            'targetSiteId' => ['type' => ['integer', 'null']],
+            'siteId' => ['type' => ['integer', 'null'], 'description' => 'For type site.'],
+            'subject' => $nullableString + ['description' => 'For type email.'],
+        ];
+
+        if ($this->showLabel) {
+            $properties['label'] = $nullableString;
+        }
+
+        if ($this->showNewWindow) {
+            $properties['newWindow'] = ['type' => 'boolean'];
+        }
+
+        if ($this->showAdvanced) {
+            foreach (['ariaLabel', 'title', 'urlSuffix', 'classes', 'id', 'rel'] as $key) {
+                $properties[$key] = $nullableString;
+            }
+            $properties['customAttributes'] = [
+                'type' => 'array',
+                'items' => [
+                    'type' => 'object',
+                    'required' => ['attribute'],
+                    'properties' => ['attribute' => ['type' => 'string'], 'value' => ['type' => 'string']],
+                    'additionalProperties' => false,
+                ],
+            ];
+        }
+
+        if ($this->allowIcons) {
+            $properties['icon'] = $nullableString + ['description' => 'Icon name from Craft’s icon set' . ($this->includeProIcons ? '' : ' (free Font Awesome icons only)') . '.'];
+        }
+
+        $link = [
+            'type' => 'object',
+            'required' => ['type'],
+            'additionalProperties' => false,
+            'properties' => $properties,
+        ];
+
+        $description = 'FreeLink. Enabled link types: ' . implode(', ', $enabled) . '.';
+
+        if (!$this->multipleLinks) {
+            return $link + ['description' => $description];
+        }
+
+        $schema = ['type' => 'array', 'items' => $link, 'description' => $description];
+        if ($this->minLinks) {
+            $schema['minItems'] = $this->minLinks;
+        }
+        if ($this->maxLinks) {
+            $schema['maxItems'] = $this->maxLinks;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * The value as MCP tools return it: resolved links, with the live target element under `target`
+     * so core applies the viewer's permissions to it (a hidden target drops that link).
+     */
+    public function getMcpValue(mixed $value, ElementInterface $element, \craft\mcp\McpOutputContext $context): mixed
+    {
+        if (!$value instanceof LinkCollection) {
+            return $this->multipleLinks ? [] : null;
+        }
+
+        $out = [];
+
+        foreach ($value->getAll() as $link) {
+            $data = [
+                'type' => $link->type,
+                'url' => $link->getUrl(),
+                'text' => $link->getText(),
+            ];
+
+            if ($link instanceof ElementLink) {
+                $target = $link->getElement();
+
+                if ($context->public) {
+                    // Public server: no element, and nothing for a target that isn't live.
+                    if (!$target || !in_array($target->getStatus(), [Element::STATUS_ENABLED, 'live'], true)) {
+                        continue;
+                    }
+                    $out[] = $data;
+                    continue;
+                }
+
+                $data['targetId'] = $link->targetId;
+                $data['targetSiteId'] = $link->targetSiteId;
+                $data['target'] = $target;
+            }
+
+            $raw = $link->toArray();
+            unset($raw['type']);
+            if ($link instanceof ElementLink) {
+                unset($raw['value']);
+            }
+
+            $out[] = $data + $raw;
+        }
+
+        if ($this->multipleLinks) {
+            return $out;
+        }
+
+        return $out[0] ?? null;
     }
 
     // endregion

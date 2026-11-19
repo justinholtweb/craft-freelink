@@ -2,6 +2,7 @@
 
 namespace justinholtweb\freelink\services;
 
+use craft\base\ElementInterface;
 use justinholtweb\freelink\base\ElementLink;
 use justinholtweb\freelink\base\Link;
 use justinholtweb\freelink\events\RegisterLinkTypesEvent;
@@ -17,6 +18,8 @@ use justinholtweb\freelink\links\Sms;
 use justinholtweb\freelink\links\Url;
 use justinholtweb\freelink\links\User;
 use justinholtweb\freelink\links\Variant;
+use justinholtweb\freelink\models\LinkReference;
+use justinholtweb\freelink\Plugin;
 use yii\base\Component;
 
 /**
@@ -106,7 +109,9 @@ class Links extends Component
         $link->classes = $data['classes'] ?? null;
         $link->id = $data['id'] ?? null;
         $link->rel = $data['rel'] ?? null;
-        $link->customAttributes = $data['customAttributes'] ?? [];
+        $link->customAttributes = is_array($data['customAttributes'] ?? null) ? array_values($data['customAttributes']) : [];
+        $icon = $data['icon'] ?? null;
+        $link->icon = is_string($icon) && trim($icon) !== '' ? trim($icon) : null;
 
         // Element link specific
         if ($link instanceof ElementLink) {
@@ -129,6 +134,42 @@ class Links extends Component
         }
 
         return $link;
+    }
+
+    /**
+     * Links in live content that point at an element (reverse lookup).
+     *
+     * Options: `field` (handle), `type` (link type handle), `site`/`siteId` (the source's site),
+     * `limit` (default 100, max 100), `offset`, `status` (see LinkIndex::createQuery()).
+     *
+     * Usage: `Plugin::getInstance()->links->findLinksTo($entry, ['field' => 'cta'])`
+     *
+     * @param array<string, mixed> $options
+     * @return LinkReference[]
+     */
+    public function findLinksTo(ElementInterface $element, array $options = []): array
+    {
+        $targetId = $element->getCanonicalId() ?: $element->id;
+
+        if (!$targetId) {
+            return [];
+        }
+
+        $criteria = [
+            'targetId' => $targetId,
+            'field' => $options['field'] ?? null,
+            'type' => $options['type'] ?? null,
+            'siteId' => $options['siteId'] ?? $options['site'] ?? null,
+            'status' => $options['status'] ?? 'all',
+        ];
+
+        $result = Plugin::getInstance()->linkIndex->find(
+            $criteria,
+            (int)($options['limit'] ?? LinkIndex::MAX_LIMIT),
+            (int)($options['offset'] ?? 0),
+        );
+
+        return $result['references'];
     }
 
     private function _loadTypes(): void
