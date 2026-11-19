@@ -34,6 +34,16 @@ reverse lookups, GraphQL and MCP — with the same names, settings and permissio
   refused, and target titles and URLs aren't shown to users or schemas that can't view the target.
 - GraphQL scope checks for link targets include the schema's site scope.
 
+### Security
+- Custom attribute names are now an allowlist (the same as FreeNav's): `aria-*`, `data-*` and a few
+  plain attributes (`title`, `rel`, `id`, `lang`, `dir`, `role`, `tabindex`, `hreflang`,
+  `itemprop`…). Event handlers, URL attributes, `style`, `class` (links have their own field) and
+  front-end framework directives — Alpine `x-*`, htmx `hx-*`/`data-hx-*`, Vue `v-*`, Angular
+  `ng-*`/`data-ng-*` and Datastar's script-running `data-*` attributes — are refused on save and,
+  when already stored, skipped when a link renders and left out of MCP output. Attribute values
+  must be text. If your front end runs some other framework that executes `data-*` attributes,
+  treat everyone who can edit FreeLink fields as trusted.
+
 ### Removed
 - Category links can't be created: Craft 6 has no categories. The upgrade turns category links whose
   category became an entry (Craft 5's `entrify/categories` keeps element IDs) into entry links, and

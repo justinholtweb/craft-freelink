@@ -45,6 +45,7 @@ use JustinHoltWeb\FreeLink\Gql\GqlScope;
 use JustinHoltWeb\FreeLink\Gql\Types\Input\LinkInput;
 use JustinHoltWeb\FreeLink\Gql\Types\LinkTypeGenerator;
 use JustinHoltWeb\FreeLink\Helpers\Icons;
+use JustinHoltWeb\FreeLink\Helpers\UrlSafety;
 use JustinHoltWeb\FreeLink\Links\Site;
 use JustinHoltWeb\FreeLink\Models\LinkCollection;
 use JustinHoltWeb\FreeLink\Services\LinkIndex;
@@ -1268,6 +1269,8 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
 
             $raw = $link->toArray();
             unset($raw['type']);
+            // Only attributes that would render.
+            $raw['customAttributes'] = UrlSafety::safeCustomAttributes($link->customAttributes);
             if ($link instanceof ElementLink) {
                 unset($raw['value']);
             }

@@ -115,10 +115,16 @@ class Link extends Model implements JsonSerializable, Stringable
             foreach ($this->customAttributes as $attr) {
                 $name = $attr['attribute'] ?? '';
 
-                if ($name !== '' && ! UrlSafety::isSafeAttributeName($name)) {
+                if ($name === '') {
+                    continue;
+                }
+
+                if (! UrlSafety::isSafeAttributeName($name)) {
                     $this->addError('customAttributes', t('“{name}” can’t be used as a custom attribute.', [
-                        'name' => is_string($name) ? $name : '',
+                        'name' => is_scalar($name) ? (string) $name : '',
                     ], category: 'freelink'));
+                } elseif (UrlSafety::customAttributeValue($attr['value'] ?? null) === null) {
+                    $this->addError('customAttributes', t('The value of “{name}” must be text.', ['name' => (string) $name], category: 'freelink'));
                 }
             }
         }
@@ -153,12 +159,10 @@ class Link extends Model implements JsonSerializable, Stringable
     {
         $safe = [];
 
-        foreach ($this->customAttributes as $attr) {
-            $name = $attr['attribute'] ?? '';
-
-            if ($name !== '' && UrlSafety::isSafeAttributeName($name)) {
-                $safe[$name] = (string) ($attr['value'] ?? '');
-            }
+        // Stored attributes are checked again here: values saved before the allowlist (or by a
+        // migration or the API, which don't validate) are skipped, not rendered.
+        foreach (UrlSafety::safeCustomAttributes($this->customAttributes) as $attr) {
+            $safe[$attr['attribute']] = $attr['value'];
         }
 
         return $safe;
