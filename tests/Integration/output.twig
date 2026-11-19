@@ -1,0 +1,7 @@
+{# FreeLink 6 port test template (removed after testing). #}
+{%- set cta = entry.fl6Cta -%}
+URL={{ cta.url }}|TEXT={{ cta.text }}|LINK={{ cta.link }}|ICON={{ cta.iconSvg ? 'svg' : 'none' }}|TARGET={{ cta.target }}
+{%- for l in entry.fl6Links.all %}|M{{ loop.index }}={{ l.type }}:{{ l.url }}{% endfor %}
+|COUNT={{ craft.freelink.linkCountTo(target) }}|GLOBAL={{ freelink.linkCountTo(target) }}
+{%- for ref in craft.freelink.linksTo(target, {limit: 10}) %}|REF={{ ref.source.title }}/{{ ref.fieldHandle }}/{{ ref.link.text }}{% endfor %}
+|REL={{ craft.freelink.getRelatedElements(target)|length }}

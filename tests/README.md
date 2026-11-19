@@ -20,7 +20,7 @@ Everything they create is prefixed `fl6`; `cleanup.php` removes it.
 | File | Covers |
 | --- | --- |
 | `fixtures.php` | fields `fl6Cta` (single, every type, icons, advanced), `fl6Links` (multi, max 5), `fl6Native` (Craft Link); sections `fl6`, `fl6Secret`; targets (live/disabled/pending/expired/secret); user `fl6editor` |
-| `checks.php` | every link type, validation, icons, CP control round trip, Twig, reverse lookups, link status, grandfathering, drafts, target visibility |
+| `checks.php` | (copy `output.twig` to the harness's `resources/views/fl6/` first) every link type, validation, icons, CP control round trip, Twig, reverse lookups, link status, grandfathering, drafts, target visibility |
 | `checks-gql.php` | field output, `FreeLinkInput` mutations, schema/site scope, `freelinkLinksTo` (in-memory schemas) |
 | `checks-http.php` | HTTP checks against the harness and every SSRF refusal (needs `config/craft/freelink.php` allowing the harness host and `resources/views/fl6/{ok,redirect}.twig`) |
 | `checks-migrate.php` | Craft Link field → FreeLink: dry run, real run with backup (run twice: once to migrate, once to verify) |

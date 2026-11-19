@@ -74,7 +74,7 @@ final class LinkControl
         if ($this->field->showAdvanced) {
             $columns['attributes'] = [
                 'heading' => t('Custom attributes', category: 'freelink'),
-                'control' => Textarea::make('attributes')->rows(2)->monospace()->placeholder('data-track=cta'),
+                'control' => Textarea::make('attributes')->rows(2)->monospace()->placeholder('name=value'),
             ];
         }
 
@@ -360,9 +360,9 @@ final class LinkControl
     {
         return match (true) {
             $class === Url::class => '^(https?:\/\/)?[^\s]+$',
-            $class === Email::class => '^mailto:[^@\s]+@[^@\s]+$',
-            $class === Phone::class => '^tel:[\d\s\-\+\(\)\.x]+$',
-            $class === Sms::class => '^sms:[\d\s\-\+\(\)\.x]+$',
+            $class === Email::class => '^(mailto:)?[^@\s]+@[^@\s]+$',
+            $class === Phone::class => '^(tel:)?[\d\s\-\+\(\)\.x]+$',
+            $class === Sms::class => '^(sms:)?[\d\s\-\+\(\)\.x]+$',
             $class === Custom::class => '.*',
             default => '.*',
         };
@@ -426,10 +426,12 @@ final class LinkControl
         }
 
         if ($link instanceof Email) {
-            return 'mailto:'.$value.($link->subject ? '?subject='.rawurlencode($link->subject) : '');
+            return $value.($link->subject ? '?subject='.rawurlencode($link->subject) : '');
         }
 
-        return isset(self::PREFIXES[$link->type]) ? self::PREFIXES[$link->type].$value : $value;
+        // Bare values: Craft's link editor shows what it's given, prefix and all. A prefix typed or
+        // pasted in is stripped on the way back (fromControlRows()).
+        return $value;
     }
 
     private function defaultLabel(Link $link): ?string

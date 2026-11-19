@@ -91,7 +91,7 @@ class LinkControlTest extends TestCase
         ]);
 
         $rows = new LinkControl($this->field)->rows($original);
-        self::assertSame('mailto:a@b.test?subject=Q%20%26%20A', $rows[1]['link']['value']);
+        self::assertSame('a@b.test?subject=Q%20%26%20A', $rows[1]['link']['value'], 'shown without mailto:');
         self::assertSame('{entry:9@1:url}', $rows[2]['link']['value']);
 
         $back = $this->field->normalizeValue($rows);
@@ -99,6 +99,19 @@ class LinkControlTest extends TestCase
         foreach ($original->getAll() as $i => $link) {
             self::assertSame($link->toArray(), $back->getAll()[$i]->toArray(), "link $i round-trips");
         }
+    }
+
+    public function test_prefixed_and_bare_values_both_post(): void
+    {
+        $value = $this->field->normalizeValue([
+            ['link' => ['type' => 'email', 'value' => 'hi@b.test']],
+            ['link' => ['type' => 'email', 'value' => 'mailto:hi@b.test']],
+            ['link' => ['type' => 'phone', 'value' => '+1 555']],
+            ['link' => ['type' => 'phone', 'value' => 'tel:+1 555']],
+        ]);
+
+        self::assertSame(['hi@b.test', 'hi@b.test', '+1 555', '+1 555'], array_map(fn ($l) => $l->value, $value->getAll()));
+        self::assertSame('+1 555', new LinkControl($this->field)->rows($value)[2]['link']['value'], 'phone shown without tel:');
     }
 
     public function test_empty_value_gets_one_default_row(): void
