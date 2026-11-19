@@ -59,10 +59,14 @@ links to products that are in stock.
 The condition does two things:
 
 - **It filters the element select modal**, so editors are only offered elements that match.
-- **It is checked again when the entry is saved.** A link whose element doesn't match is refused
-  with a validation error. This covers links that were chosen before the condition was added, and
-  element IDs posted directly. Like Craft's own field validation, this check runs on live saves,
-  not on drafts.
+- **It is checked again when the entry is saved.** A new or changed link whose element doesn't match
+  is refused with a validation error, including element IDs posted directly. Links already saved
+  before the condition was added keep saving as long as their target doesn't change (5.3+). Like
+  Craft's own field validation, this check runs on live saves, not on drafts.
+
+The same rule covers the other save checks: a link whose type and destination are unchanged is never
+refused because its link type was turned off later or because the editor can't view its target.
+Only new or changed links are checked.
 
 Rules that depend on the entry being edited, such as "related to the current entry", are given that
 entry as their reference element. Fields with no condition behave as they did before.
@@ -362,7 +366,9 @@ element already at that position, or pass `null` to clear it.
 
 A mutation is validated exactly like a save in the control panel: only link types the field enables,
 per-type validation, no script URLs or event-handler attributes, icons, min/max links, required,
-selection conditions — and the target element must exist and be readable by the schema.
+selection conditions — and the target element must exist and be readable by the schema. As in the
+control panel, links already stored on the element and unchanged (same type and destination) are not
+re-checked against the type, condition and visibility rules.
 
 ### Reverse lookups
 

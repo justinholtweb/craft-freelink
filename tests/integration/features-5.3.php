@@ -99,6 +99,14 @@ function saveFieldSettings(array $settings): FreeLinkField
     $fieldsService->refreshFields();
     Craft::$app->getGql()->flushCaches();
 
+    // Entry type layouts keep their own field instances for the rest of this process; give them
+    // the same settings so validation in this process sees them.
+    global $testType;
+    $layoutField = $testType->getFieldLayout()->getFieldByHandle('freelinkItTest');
+    foreach ($settings as $k => $v) {
+        $layoutField->$k = $v;
+    }
+
     return $field = $fieldsService->getFieldById($field->id);
 }
 
@@ -401,6 +409,86 @@ check('a target the signed-in user cannot view is refused', function() use ($val
     } finally {
         Craft::$app->getUser()->setIdentity(null);
     }
+});
+
+section('Grandfathering: unchanged links are never blocked by the 5.3 checks');
+
+$revalidate = function(Entry $entry, ?array $links = null): array {
+    $fresh = Entry::find()->id($entry->id)->status(null)->one();
+    if ($links !== null) {
+        $fresh->setFieldValue('freelinkItTest', $links);
+    }
+    $fresh->setScenario(Element::SCENARIO_LIVE);
+    $fresh->validate();
+    return $fresh->getErrors('freelinkItTest');
+};
+
+$gfType = makeEntry('FL53 grandfather type', [], [
+    ['type' => 'custom', 'value' => '#kept'],
+    ['type' => 'url', 'value' => 'https://kept.example.org/'],
+]);
+$gfView = makeEntry('FL53 grandfather view', [], [['type' => 'entry', 'targetId' => $tLive->id]]);
+
+// Turn the Custom type off on the field, as an admin tightening it after content exists.
+$typesWithCustom = $field->linkTypes;
+$typesWithoutCustom = $typesWithCustom;
+$typesWithoutCustom['custom']['enabled'] = false;
+saveFieldSettings(['linkTypes' => $typesWithoutCustom]);
+
+check('an unchanged link of a type the field no longer enables still saves', function() use ($gfType) {
+    $fresh = Entry::find()->id($gfType->id)->status(null)->one();
+    $fresh->setScenario(Element::SCENARIO_LIVE);
+    return Craft::$app->getElements()->saveElement($fresh) ?: json_encode($fresh->getErrors());
+});
+
+check('…and still saves with only its label changed', fn() => $revalidate($gfType, [
+    ['type' => 'custom', 'value' => '#kept', 'label' => 'New label'],
+    ['type' => 'url', 'value' => 'https://kept.example.org/'],
+]) === []);
+
+check('changing a link to the disabled type fails', fn() => count($e = $revalidate($gfType, [
+    ['type' => 'custom', 'value' => '#kept'],
+    ['type' => 'custom', 'value' => 'https://kept.example.org/'],
+])) === 1 ?: json_encode($e));
+
+check('changing the disabled-type link’s destination fails', fn() => count($e = $revalidate($gfType, [
+    ['type' => 'custom', 'value' => '#changed'],
+    ['type' => 'url', 'value' => 'https://kept.example.org/'],
+])) === 1 ?: json_encode($e));
+
+saveFieldSettings(['linkTypes' => $typesWithCustom]);
+
+$cannotView = new craft\elements\User(['id' => 999999991, 'username' => 'fl53-nobody', 'admin' => false]);
+
+check('an unchanged link to a target the editor can’t view still validates', function() use ($revalidate, $gfView, $cannotView) {
+    Craft::$app->getUser()->setIdentity($cannotView);
+    try {
+        return ($e = $revalidate($gfView)) === [] ?: json_encode($e);
+    } finally {
+        Craft::$app->getUser()->setIdentity(null);
+    }
+});
+
+check('changing the target to one the editor can’t view fails', function() use ($revalidate, $gfView, $cannotView, $tExpired) {
+    Craft::$app->getUser()->setIdentity($cannotView);
+    try {
+        $errors = $revalidate($gfView, [['type' => 'entry', 'targetId' => $tExpired->id]]);
+        return count($errors) === 1 && str_contains($errors[0], 'can’t link') ?: json_encode($errors);
+    } finally {
+        Craft::$app->getUser()->setIdentity(null);
+    }
+});
+
+check('a link to a target deleted since loading becomes empty instead of failing', function() use ($tLive) {
+    $doomed = makeEntry('FL53 doomed target');
+    $holder = makeEntry('FL53 holder', [], [['type' => 'entry', 'targetId' => $doomed->id]]);
+    $loaded = Entry::find()->id($holder->id)->status(null)->one();
+    $loaded->getFieldValue('freelinkItTest'); // value loaded with the target
+    Craft::$app->getElements()->deleteElement($doomed, true);
+    $loaded->setScenario(Element::SCENARIO_LIVE);
+    $saved = Craft::$app->getElements()->saveElement($loaded);
+    $fresh = Entry::find()->id($holder->id)->status(null)->one();
+    return $saved && $fresh->getFieldValue('freelinkItTest')->first()?->targetId === null ?: json_encode($loaded->getErrors());
 });
 
 section('Icons');

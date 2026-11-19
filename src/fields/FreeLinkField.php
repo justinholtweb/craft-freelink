@@ -605,13 +605,20 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
         }
 
         $enabledTypes = $this->getEnabledTypeHandles();
+        // Links already stored on this element (or its canonical) are grandfathered: the 5.3 checks
+        // (enabled type, target existence/visibility, selection condition, icon) apply only to new or
+        // changed links, so tightening a field never blocks saving existing content.
+        $stored = $this->storedLinks($element);
+        $deletedTargetPositions = $this->deletedTargetPositions($element);
 
         // Validate individual links
         foreach ($value->getAll() as $index => $link) {
             $num = $index + 1;
+            $storedLink = $stored[self::linkKey($link)] ?? null;
+            $unchanged = $storedLink !== null;
 
             // The CP only offers enabled types, but a POST, GraphQL or MCP can name any type.
-            if ($enabledTypes && !in_array($link->type, $enabledTypes, true)) {
+            if (!$unchanged && $enabledTypes && !in_array($link->type, $enabledTypes, true)) {
                 $element->addError($this->handle, Craft::t('freelink', '{attribute}: link {num} uses the “{type}” link type, which this field doesn’t allow.', [
                     'attribute' => $this->name,
                     'num' => $num,
@@ -623,7 +630,7 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
             if ($link->icon !== null) {
                 if (!$this->allowIcons) {
                     $link->icon = null;
-                } elseif (!Icons::exists($link->icon, $this->includeProIcons)) {
+                } elseif (!($unchanged && $storedLink->icon === $link->icon) && !Icons::exists($link->icon, $this->includeProIcons)) {
                     $element->addError($this->handle, Craft::t('freelink', '{attribute}: the icon for link {num} isn’t available.', [
                         'attribute' => $this->name,
                         'num' => $num,
@@ -632,6 +639,14 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
             }
 
             if ($link instanceof ElementLink && $link->targetId && !$this->linkTargetExists($link, $element)) {
+                if (in_array((int)$index, $deletedTargetPositions, true)) {
+                    // The stored target was deleted since this value was loaded: the link becomes
+                    // empty, as it does on the next load anyway.
+                    $link->targetId = null;
+                    $link->targetSiteId = null;
+                    continue;
+                }
+
                 $element->addError($this->handle, Craft::t('freelink', '{attribute}: the {type} chosen for link {num} doesn’t exist.', [
                     'attribute' => $this->name,
                     'type' => mb_strtolower($link::displayName()),
@@ -640,7 +655,7 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
                 continue;
             }
 
-            if ($link instanceof ElementLink && $link->targetId && !$this->actorMayLinkTo($link, $element)) {
+            if (!$unchanged && $link instanceof ElementLink && $link->targetId && !$this->actorMayLinkTo($link, $element)) {
                 $element->addError($this->handle, Craft::t('freelink', '{attribute}: you can’t link to the {type} chosen for link {num}.', [
                     'attribute' => $this->name,
                     'type' => mb_strtolower($link::displayName()),
@@ -657,7 +672,7 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
                 }
             }
 
-            if ($link instanceof ElementLink && !$this->linkMatchesSelectionCondition($link, $element)) {
+            if (!$unchanged && $link instanceof ElementLink && !$this->linkMatchesSelectionCondition($link, $element)) {
                 $element->addError($this->handle, Craft::t('freelink', '{attribute}: the {type} chosen for link {num} isn’t allowed here.', [
                     'attribute' => $this->name,
                     'type' => mb_strtolower($link::displayName()),
@@ -665,6 +680,89 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
                 ]));
             }
         }
+    }
+
+    /**
+     * What makes two links "the same link" for grandfathering: type and destination. Label, new
+     * window, icon and the advanced attributes can change without the link counting as new.
+     */
+    public static function linkKey(Link $link): string
+    {
+        if ($link instanceof ElementLink) {
+            return $link->type . '|#' . (int)$link->targetId;
+        }
+
+        $key = $link->type . '|' . (string)$link->value;
+
+        if ($link instanceof \justinholtweb\freelink\links\Site) {
+            $key .= '|' . (int)$link->siteId;
+        }
+
+        return $key;
+    }
+
+    /**
+     * The links stored for this field on the element and its canonical element, keyed by linkKey().
+     *
+     * @return array<string, Link>
+     */
+    public function storedLinks(ElementInterface $element): array
+    {
+        $links = [];
+        $siteId = $element->siteId ?? Craft::$app->getSites()->getCurrentSite()->id;
+
+        foreach (array_unique(array_filter([$element->id, $element->getCanonicalId()])) as $id) {
+            $stored = $element::find()
+                ->id($id)
+                ->siteId($siteId)
+                ->status(null)
+                ->drafts(null)
+                ->provisionalDrafts(null)
+                ->revisions(null)
+                ->one();
+
+            if (!$stored) {
+                continue;
+            }
+
+            try {
+                $value = $stored->getFieldValue($this->handle);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if ($value instanceof LinkCollection) {
+                foreach ($value->getAll() as $link) {
+                    $links[self::linkKey($link)] ??= $link;
+                }
+            }
+        }
+
+        return $links;
+    }
+
+    /**
+     * Positions whose stored element target was deleted (the relation row survives with a null
+     * target after the foreign key's SET NULL).
+     *
+     * @return int[]
+     */
+    private function deletedTargetPositions(ElementInterface $element): array
+    {
+        if (!$element->id || !$this->id) {
+            return [];
+        }
+
+        return array_map('intval', (new \craft\db\Query())
+            ->select(['sortOrder'])
+            ->from('{{%freelink_links}}')
+            ->where([
+                'fieldId' => $this->id,
+                'ownerId' => array_unique(array_filter([$element->id, $element->getCanonicalId()])),
+                'ownerSiteId' => $element->siteId ?? Craft::$app->getSites()->getCurrentSite()->id,
+                'targetId' => null,
+            ])
+            ->column());
     }
 
     /**

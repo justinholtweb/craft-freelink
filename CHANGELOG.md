@@ -38,9 +38,13 @@
 ### Changed
 - The migration tools moved into the FreeLink section (**Migrations**), where a migration can be
   dry-run or run. The old `freelink/migrate` URL redirects there.
-- Saving now refuses a link of a type the field doesn't enable, an element link to an element that
-  doesn't exist, and a new element link to an element the person (or GraphQL schema) saving can't
-  view. The control panel never offered these; a POST, GraphQL or MCP could.
+- Saving now refuses a new or changed link of a type the field doesn't enable, an element link to an
+  element that doesn't exist, and an element link to an element the person (or GraphQL schema)
+  saving can't view. The control panel never offered these; a POST, GraphQL or MCP could.
+- Links that are already saved are left alone by these checks and by the selection condition: a link
+  whose type and destination haven't changed still saves after the field is tightened (a type turned
+  off, a condition added) or when the editor can't view its target. Editing its label or other
+  attributes doesn't count as a change. A link whose target was deleted becomes empty.
 
 ### Fixed
 - Setting an element link's `targetId` in PHP, GraphQL, Feed Me or MCP on an existing element no
