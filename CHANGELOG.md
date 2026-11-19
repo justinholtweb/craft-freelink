@@ -47,6 +47,12 @@
   off, a condition added) or when the editor can't view its target. Editing its label or other
   attributes doesn't count as a change. Links in drafts are always checked when the draft is
   published. A link whose target was deleted becomes empty.
+- Drafts (and any save that skips validation) still get the security check: a new or changed element
+  link must point at an element the person or GraphQL schema saving can view. Min/max, required and
+  selection conditions stay checks for live saves only.
+- The field input, GraphQL (`url`, `text`) and MCP output no longer show the title or URL of a linked
+  element the current user or schema can't view. The field input keeps the link as it is, labelled
+  "An element you can't view", so saving doesn't drop it.
 
 ### Fixed
 - Setting an element link's `targetId` in PHP, GraphQL, Feed Me or MCP on an existing element no

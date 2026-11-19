@@ -18,6 +18,7 @@ use justinholtweb\freelink\base\Link;
 use justinholtweb\freelink\gql\GqlScope;
 use justinholtweb\freelink\gql\types\input\LinkInput;
 use justinholtweb\freelink\helpers\Icons;
+use justinholtweb\freelink\helpers\TargetVisibility;
 use justinholtweb\freelink\models\LinkCollection;
 use justinholtweb\freelink\Plugin;
 
@@ -415,6 +416,61 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
 
     // region Element lifecycle
 
+    /**
+     * The security half of link validation, on every save — drafts, provisional drafts and
+     * essentials saves included, and saves that skip validation.
+     *
+     * Field validation (validateLinks()) only runs on live saves, so without this an editor could
+     * save a draft linking to an element they can't view, and the draft's editor or preview would
+     * show that element's title and URL. Each element link that isn't unchanged from the live
+     * content (storedLinks()) must point at an element the saving user (or GraphQL schema) can
+     * view. Min/max, required, selection conditions and the other checks stay live-only.
+     */
+    public function beforeElementSave(ElementInterface $element, bool $isNew): bool
+    {
+        if (!parent::beforeElementSave($element, $isNew)) {
+            return false;
+        }
+
+        if (!$element->isFieldDirty($this->handle) && !$isNew) {
+            // Nothing new was set on this field in this request.
+            return true;
+        }
+
+        $value = $element->getFieldValue($this->handle);
+
+        if (!$value instanceof LinkCollection) {
+            return true;
+        }
+
+        $stored = null;
+        $ok = true;
+
+        foreach ($value->getAll() as $index => $link) {
+            if (!$link instanceof ElementLink || !$link->targetId) {
+                continue;
+            }
+
+            $stored ??= $this->storedLinks($element);
+
+            if (isset($stored[self::linkKey($link)])) {
+                continue;
+            }
+
+            if (!$this->actorMayLinkTo($link, $element)) {
+                $element->addError($this->handle, Craft::t('freelink', '{attribute}: you can’t link to the {type} chosen for link {num}.', [
+                    'attribute' => $this->name,
+                    'type' => mb_strtolower($link::displayName()),
+                    'num' => $index + 1,
+                ]));
+                $ok = false;
+            }
+        }
+
+        return $ok;
+    }
+
+
     public function afterElementSave(ElementInterface $element, bool $isNew): void
     {
         $value = $element->getFieldValue($this->handle);
@@ -570,6 +626,7 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
 
     public function validateLinks(ElementInterface $element): void
     {
+
         /** @var LinkCollection $value */
         $value = $element->getFieldValue($this->handle);
 
@@ -1001,10 +1058,13 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
         $out = [];
 
         foreach ($value->getAll() as $link) {
+            // Core also drops links whose `target` element the viewer can't see; this keeps the
+            // target's URL and title out even if it didn't.
+            $visible = $context->public || TargetVisibility::canSee($link);
             $data = [
                 'type' => $link->type,
-                'url' => $link->getUrl(),
-                'text' => $link->getText(),
+                'url' => $visible ? $link->getUrl() : null,
+                'text' => $visible ? $link->getText() : ($link->label ?: null),
             ];
 
             if ($link instanceof ElementLink) {
@@ -1021,7 +1081,7 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
 
                 $data['targetId'] = $link->targetId;
                 $data['targetSiteId'] = $link->targetSiteId;
-                $data['target'] = $target;
+                $data['target'] = $visible ? $target : null;
             }
 
             $raw = $link->toArray();

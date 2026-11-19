@@ -101,9 +101,29 @@ class GqlScope
         return $allowed;
     }
 
+    /** @var array<string, bool> */
+    private static array $_canQuery = [];
+
     public static function canQuery(int $id, ?int $siteId = null): bool
     {
-        return in_array($id, self::filterQueryable([$id], $siteId), true);
+        try {
+            $schema = Craft::$app->getGql()->getActiveSchema();
+            $key = md5(json_encode([$schema->id, $schema->scope]) ?: '') . ":$id:" . (int)$siteId;
+        } catch (GqlException) {
+            $key = null;
+        }
+
+        if ($key !== null && isset(self::$_canQuery[$key])) {
+            return self::$_canQuery[$key];
+        }
+
+        $result = in_array($id, self::filterQueryable([$id], $siteId), true);
+
+        if ($key !== null) {
+            self::$_canQuery[$key] = $result;
+        }
+
+        return $result;
     }
 
     /**

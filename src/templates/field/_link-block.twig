@@ -40,12 +40,26 @@
                     {% if elementType %}
                         {% set elClass = (create(elementType)).elementType() %}
                         {% set selectedElements = [] %}
+                        {% set hiddenTarget = false %}
                         {% if typeOpt.handle == link.type and link.isElement() and link.getElement() %}
-                            {% set selectedElements = [link.getElement()] %}
+                            {% set viewer = craft.app.user.identity %}
+                            {% if not viewer or craft.app.elements.canView(link.getElement(), viewer) %}
+                                {% set selectedElements = [link.getElement()] %}
+                            {% else %}
+                                {# Never show the title of an element this user can't view; keep the
+                                   link as it is so saving doesn't drop it. #}
+                                {% set hiddenTarget = true %}
+                            {% endif %}
                         {% endif %}
 
                         {% set sources = typeOpt.sources ?? '*' %}
 
+                        {% if hiddenTarget %}
+                            <div class="freelink-hidden-target light">
+                                {{ 'An element you can’t view'|t('freelink') }}
+                                {{ hiddenInput(namePrefix ~ '[elements][' ~ typeOpt.handle ~ '][]', link.targetId) }}
+                            </div>
+                        {% else %}
                         {{ craft.app.view.renderTemplate('_includes/forms/elementSelect', {
                             name: namePrefix ~ '[elements][' ~ typeOpt.handle ~ ']',
                             elementType: elClass,
@@ -56,6 +70,7 @@
                             limit: 1,
                             modalStorageKey: 'freelink.' ~ typeOpt.handle,
                         })|raw }}
+                        {% endif %}
                     {% endif %}
                 {% else %}
                     {# Text input for simple link types #}

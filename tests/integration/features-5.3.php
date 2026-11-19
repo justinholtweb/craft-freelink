@@ -22,6 +22,7 @@ $app = require CRAFT_VENDOR_PATH . '/craftcms/cms/bootstrap/console.php';
 
 use craft\base\Element;
 use craft\elements\Entry;
+use craft\elements\User;
 use craft\helpers\Db;
 use craft\models\GqlSchema;
 use justinholtweb\freelink\fields\FreeLinkField;
@@ -526,6 +527,76 @@ check('changing only the target site re-runs the checks', function() use ($reval
     }
 });
 
+section('Drafts and targets the viewer can’t see');
+
+check('a draft save with a new target the editor can’t view fails', function() use ($gfView, $cannotView, $tExpired) {
+    $canonical = Entry::find()->id($gfView->id)->status(null)->one();
+    $draft = Craft::$app->getDrafts()->createDraft($canonical, 1);
+    Craft::$app->getUser()->setIdentity($cannotView);
+    try {
+        $draft->setFieldValue('freelinkItTest', [['type' => 'entry', 'targetId' => $tExpired->id]]);
+        // Drafts skip field validation; the security check still runs.
+        $saved = Craft::$app->getElements()->saveElement($draft, false);
+        $errors = $draft->getErrors('freelinkItTest');
+    } finally {
+        Craft::$app->getUser()->setIdentity(null);
+        Craft::$app->getElements()->deleteElement($draft, true);
+    }
+    return !$saved && count($errors) === 1 ?: json_encode([$saved, $errors]);
+});
+
+check('a draft keeping an unchanged live link to a now-unviewable target saves', function() use ($gfView, $tLive) {
+    // A real user (the draft save records them as an author), with no permission to view entries.
+    $cannotView = User::find()->admin(false)->status('active')->one();
+    if (!$cannotView || Craft::$app->getElements()->canView($tLive, $cannotView)) {
+        return 'need a non-admin that can’t view Test Entries';
+    }
+    $canonical = Entry::find()->id($gfView->id)->status(null)->one();
+    $draft = Craft::$app->getDrafts()->createDraft($canonical, 1);
+    Craft::$app->getUser()->setIdentity($cannotView);
+    try {
+        $draft->title = 'FL53 grandfather view (edited)';
+        $draft->setFieldValue('freelinkItTest', [['type' => 'entry', 'targetId' => $tLive->id, 'label' => 'relabelled']]);
+        $saved = Craft::$app->getElements()->saveElement($draft, false);
+        $errors = $draft->getErrors();
+    } finally {
+        Craft::$app->getUser()->setIdentity(null);
+        Craft::$app->getElements()->deleteElement($draft, true);
+    }
+    return $saved ?: json_encode($errors);
+});
+
+check('the field input hides an unviewable target’s title but keeps the link', function() use ($gfView, $cannotView, $tLive) {
+    $owner = Entry::find()->id($gfView->id)->status(null)->one();
+    $field = $owner->getFieldLayout()->getFieldByHandle('freelinkItTest');
+    Craft::$app->getUser()->setIdentity($cannotView);
+    try {
+        $html = $field->getInputHtml($owner->getFieldValue('freelinkItTest'), $owner);
+    } finally {
+        Craft::$app->getUser()->setIdentity(null);
+    }
+    // (The visible case renders Craft's element chips, which need a web request: cp-5.3.php covers it.)
+    return !str_contains($html, $tLive->title) && str_contains($html, 'freelink-hidden-target') && str_contains($html, 'value="' . $tLive->id . '"')
+        ?: 'title leaked or link not kept';
+});
+
+check('MCP output hides an unviewable target’s URL, title and element', function() use ($gfView, $cannotView, $tLive) {
+    if (!class_exists(craft\mcp\McpOutputContext::class)) {
+        return true;
+    }
+    $owner = Entry::find()->id($gfView->id)->status(null)->one();
+    $field = $owner->getFieldLayout()->getFieldByHandle('freelinkItTest');
+    Craft::$app->getUser()->setIdentity($cannotView);
+    try {
+        $out = $field->getMcpValue($owner->getFieldValue('freelinkItTest'), $owner, new craft\mcp\McpOutputContext());
+    } finally {
+        Craft::$app->getUser()->setIdentity(null);
+    }
+    $first = $field->multipleLinks ? ($out[0] ?? []) : $out;
+    return $first['url'] === null && $first['target'] === null && !str_contains((string)json_encode($first), $tLive->title)
+        ?: json_encode($first);
+});
+
 check('a link to a target deleted since loading becomes empty instead of failing', function() use ($tLive) {
     $doomed = makeEntry('FL53 doomed target');
     $holder = makeEntry('FL53 holder', [], [['type' => 'entry', 'targetId' => $doomed->id]]);
@@ -725,6 +796,22 @@ check('a schema that cannot read the target gets an empty list', function() use 
     $news = Craft::$app->getEntries()->getSectionByHandle('news');
     $r = gqlRun(["sections.$news->uid:read", 'freelinkLinks:read'], "{ freelinkLinksTo(elementId: {$tLive->id}) { sourceId } }");
     return ($r['data']['freelinkLinksTo'] ?? null) === [] ?: json_encode($r);
+});
+
+check('GraphQL hides the URL and title of a target the schema can’t query', function() use ($tLive, $readScope) {
+    $news = Entry::find()->section('news')->one();
+    if (!$news) {
+        return 'no news entry';
+    }
+    $holder = makeEntry('FL53 holder of news link', [], [['type' => 'entry', 'targetId' => $news->id]]);
+    $q = "{ entry(id: {$holder->id}) { ... on {$GLOBALS['testType']->handle}_Entry { freelinkItTest { url text elementId } } } }";
+    $r = gqlRun($readScope, $q);
+    $link = $r['data']['entry']['freelinkItTest'][0] ?? null;
+    $newsUid = Craft::$app->getEntries()->getSectionByHandle('news')->uid;
+    $r2 = gqlRun([...$readScope, "sections.$newsUid:read"], $q);
+    $link2 = $r2['data']['entry']['freelinkItTest'][0] ?? null;
+    return $link && $link['url'] === null && $link['text'] === null && $link2 && $link2['text'] === $news->title
+        ?: json_encode([$link, $link2]);
 });
 
 check('GqlScope keeps only sources the schema can query', function() use ($schemaFor, $gql, $sectionUid, $owner) {

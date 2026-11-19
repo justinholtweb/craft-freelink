@@ -6,7 +6,9 @@ use craft\gql\GqlEntityRegistry;
 use GraphQL\Type\Definition\InterfaceType;
 use GraphQL\Type\Definition\Type;
 use justinholtweb\freelink\base\ElementLink;
+use justinholtweb\freelink\base\Link;
 use justinholtweb\freelink\gql\types\LinkType;
+use justinholtweb\freelink\helpers\TargetVisibility;
 use justinholtweb\freelink\links\Email;
 use justinholtweb\freelink\links\Site;
 
@@ -51,12 +53,14 @@ class FreeLinkInterface
             'url' => [
                 'name' => 'url',
                 'type' => Type::string(),
-                'description' => 'The resolved URL.',
+                'description' => 'The resolved URL. Null for an element the schema can’t query.',
+                'resolve' => fn(Link $source) => TargetVisibility::canSee($source) ? $source->getUrl() : null,
             ],
             'text' => [
                 'name' => 'text',
                 'type' => Type::string(),
-                'description' => 'The display text.',
+                'description' => 'The display text. Only the custom label for an element the schema can’t query.',
+                'resolve' => fn(Link $source) => TargetVisibility::canSee($source) ? $source->getText() : ($source->label ?: null),
             ],
             'label' => [
                 'name' => 'label',

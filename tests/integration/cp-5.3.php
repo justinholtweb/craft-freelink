@@ -298,6 +298,12 @@ check('with icons allowed, the link block has an icon picker (free icons only)',
     return str_contains($html, 'freelink-icon-field') && str_contains($html, 'data-free-only="1"') && str_contains($html, 'Craft.IconPicker') ?: 'no picker';
 });
 
+check('an admin sees the linked element’s chip in the field input', function() use ($http, $created, $target) {
+    // created[5] is "FL53 CP owner 5", which links to the target entry.
+    $html = (string)$http->get('/admin/entries/testEntries/' . $created[5])->getBody();
+    return str_contains($html, 'FL53 CP target') && !str_contains($html, 'freelink-hidden-target') ?: 'no chip';
+});
+
 echo "\nPermissions\n";
 
 $plain = new Client(['base_uri' => $base, 'cookies' => new CookieJar(), 'allow_redirects' => false, 'http_errors' => false]);
