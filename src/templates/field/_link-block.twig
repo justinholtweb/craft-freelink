@@ -113,6 +113,24 @@
             </div>
         {% endif %}
 
+        {# Icon #}
+        {% if field.allowIcons %}
+            <div class="field freelink-icon-field" data-free-only="{{ field.includeProIcons ? 0 : 1 }}">
+                <div class="heading">
+                    <label>{{ 'Icon'|t('freelink') }}</label>
+                </div>
+                <div class="input">
+                    {{ craft.app.view.renderTemplate('_includes/forms/iconPicker', {
+                        id: 'freelink-icon-' ~ field.handle ~ '-' ~ index,
+                        name: namePrefix ~ '[icon]',
+                        value: link.icon,
+                        freeOnly: not field.includeProIcons,
+                        small: true,
+                    })|raw }}
+                </div>
+            </div>
+        {% endif %}
+
         {# New window toggle #}
         {% if showNewWindow %}
             <div class="field">

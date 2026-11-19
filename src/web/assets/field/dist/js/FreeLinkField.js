@@ -121,6 +121,18 @@
             // Initialize any element selectors in the new block
             Craft.initUiElements($newBlock);
 
+            // Icon pickers in the template were never instantiated (their {% js %} ran against
+            // the template's placeholder id), so start them here.
+            if (Craft.IconPicker) {
+                $newBlock.find('.freelink-icon-field .icon-picker').each(function() {
+                    if (!$(this).data('iconpicker')) {
+                        new Craft.IconPicker(this, {
+                            freeOnly: $(this).closest('.freelink-icon-field').data('free-only') === 1
+                        });
+                    }
+                });
+            }
+
             this._updateAddButton();
 
             if (this.sortable) {

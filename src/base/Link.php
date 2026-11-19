@@ -6,6 +6,7 @@ use Craft;
 use craft\helpers\Html;
 use craft\helpers\Template;
 use JsonSerializable;
+use justinholtweb\freelink\helpers\Icons;
 use justinholtweb\freelink\helpers\UrlSafety;
 use Twig\Markup;
 use yii\base\Model;
@@ -28,6 +29,8 @@ class Link extends Model implements JsonSerializable
     public ?string $rel = null;
     /** @var list<array<string, mixed>> */
     public array $customAttributes = [];
+    /** Icon name from Craft's icon set (e.g. `arrow-right`), when the field allows icons. */
+    public ?string $icon = null;
 
     /**
      * Returns the display name for this link type.
@@ -87,6 +90,7 @@ class Link extends Model implements JsonSerializable
         $rules = parent::rules();
         $rules[] = ['value', 'validateSafeUrl', 'skipOnEmpty' => true];
         $rules[] = ['customAttributes', 'validateCustomAttributes', 'skipOnEmpty' => true];
+        $rules[] = ['icon', 'validateIcon', 'skipOnEmpty' => true];
 
         return $rules;
     }
@@ -110,6 +114,29 @@ class Link extends Model implements JsonSerializable
                 ]));
             }
         }
+    }
+
+    public function validateIcon(string $attribute): void
+    {
+        if (!Icons::isValidName((string)$this->icon) || Icons::path((string)$this->icon) === null) {
+            $this->addError($attribute, Craft::t('freelink', '“{icon}” isn’t an icon.', [
+                'icon' => (string)$this->icon,
+            ]));
+        }
+    }
+
+    /**
+     * The link's icon as inline SVG markup, or null when it has none.
+     *
+     * Usage: `{{ link.iconSvg }}` or `{{ link.getIconSvg({class: 'icon'}) }}`
+     *
+     * @param array<string, mixed> $attributes
+     */
+    public function getIconSvg(array $attributes = []): ?Markup
+    {
+        $svg = Icons::svg($this->icon, $attributes);
+
+        return $svg === null ? null : Template::raw($svg);
     }
 
     /**
@@ -278,7 +305,7 @@ class Link extends Model implements JsonSerializable
      */
     public function toArray(array $fields = [], array $expand = [], $recursive = true): array
     {
-        return [
+        $data = [
             'type' => $this->type,
             'value' => $this->value,
             'label' => $this->label,
@@ -291,6 +318,13 @@ class Link extends Model implements JsonSerializable
             'rel' => $this->rel,
             'customAttributes' => $this->customAttributes,
         ];
+
+        // Only stored when set, so links without an icon keep the pre-5.3 JSON shape.
+        if ($this->icon !== null && $this->icon !== '') {
+            $data['icon'] = $this->icon;
+        }
+
+        return $data;
     }
 
     // region API serialization
@@ -315,6 +349,7 @@ class Link extends Model implements JsonSerializable
             'classes' => $this->classes,
             'id' => $this->id,
             'rel' => $this->rel,
+            'icon' => $this->icon,
             'isEmpty' => $this->isEmpty(),
             'isElement' => $this->isElement(),
         ];

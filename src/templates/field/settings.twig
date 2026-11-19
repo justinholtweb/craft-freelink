@@ -119,6 +119,21 @@
     on: field.showAdvanced,
 }) }}
 
+{{ forms.lightswitchField({
+    label: 'Allow icons'|t('freelink'),
+    instructions: 'Let editors pick an icon for each link. Templates output it with `link.iconSvg`.'|t('freelink'),
+    name: 'allowIcons',
+    on: field.allowIcons,
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Include Font Awesome Pro icons'|t('freelink'),
+    instructions: 'Off offers only the free Font Awesome icons.'|t('freelink'),
+    warning: 'Craft’s Pro icons are licensed for the control panel. Showing them on your site needs your own Font Awesome Pro licence.'|t('freelink'),
+    name: 'includeProIcons',
+    on: field.includeProIcons,
+}) }}
+
 <hr>
 
 <h2>{{ 'Defaults'|t('freelink') }}</h2>
