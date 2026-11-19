@@ -140,7 +140,8 @@ class Links extends Component
      * Links in live content that point at an element (reverse lookup).
      *
      * Options: `field` (handle), `type` (link type handle), `site`/`siteId` (the source's site),
-     * `limit` (default 100, max 100), `offset`, `status` (see LinkIndex::createQuery()).
+     * `limit` (default 100, max 100), `offset`, `status` (see LinkIndex::createQuery()), `viewer`
+     * (a User: only links whose source they may view).
      *
      * Usage: `Plugin::getInstance()->links->findLinksTo($entry, ['field' => 'cta'])`
      *
@@ -161,6 +162,7 @@ class Links extends Component
             'type' => $options['type'] ?? null,
             'siteId' => $options['siteId'] ?? $options['site'] ?? null,
             'status' => $options['status'] ?? 'all',
+            'viewer' => $options['viewer'] ?? null,
         ];
 
         $result = Plugin::getInstance()->linkIndex->find(

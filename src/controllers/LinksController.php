@@ -91,7 +91,12 @@ class LinksController extends Controller
             $filters['source'] = null;
         }
 
+        $user = Craft::$app->getUser()->getIdentity();
+
+        // Rows whose source the user can't view are left out in the query, so neither the rows nor
+        // the totals and pagination reveal them.
         $result = $index->find([
+            'viewer' => $user,
             'type' => $filters['type'],
             'fieldId' => $filters['field'],
             'siteId' => $filters['site'],
@@ -103,7 +108,6 @@ class LinksController extends Controller
         ], self::PAGE_SIZE, ($page - 1) * self::PAGE_SIZE);
 
         $total = $result['total'];
-        $user = Craft::$app->getUser()->getIdentity();
         $elements = Craft::$app->getElements();
 
         $rows = [];
@@ -111,11 +115,17 @@ class LinksController extends Controller
             $root = $ref->getRootSource();
             $target = $ref->getTarget();
 
+            // Defence in depth: the query already scoped rows to viewable sources; a source that
+            // still isn't viewable (an EVENT_AUTHORIZE_VIEW veto) is dropped, never half-shown.
+            if (!$root || !$user || !$elements->canView($root, $user)) {
+                continue;
+            }
+
             $rows[] = [
                 'ref' => $ref,
-                'root' => $root && $user && $elements->canView($root, $user) ? $root : null,
+                'root' => $root,
                 'nested' => $ref->sourceId !== $ref->rootSourceId,
-                'target' => $target && $user && $elements->canView($target, $user) ? $target : null,
+                'target' => $target && $elements->canView($target, $user) ? $target : null,
                 'field' => $ref->getField(),
             ];
         }
@@ -152,7 +162,6 @@ class LinksController extends Controller
             'filters' => $filters,
             'baseParams' => $baseParams,
             'rows' => $rows,
-            'hiddenCount' => count(array_filter($rows, fn($r) => $r['root'] === null)),
             'pageInfo' => [
                 'first' => $first,
                 'last' => $last,

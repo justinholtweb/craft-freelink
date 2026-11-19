@@ -34,23 +34,22 @@ class ReverseLookupPanel
         }
 
         $index = Plugin::getInstance()->linkIndex;
-        $total = $index->countTo((int)$targetId);
+        // Only links from sources this user may view: counts included.
+        $total = $index->countTo((int)$targetId, $identity);
 
         if ($total === 0) {
             return '';
         }
 
-        $result = $index->find(['targetId' => $targetId], self::LIMIT);
+        $result = $index->find(['targetId' => $targetId, 'viewer' => $identity], self::LIMIT);
         $elements = Craft::$app->getElements();
         $items = '';
-        $hidden = 0;
         $seen = [];
 
         foreach ($result['references'] as $ref) {
             $root = $ref->getRootSource();
 
             if (!$root || !$elements->canView($root, $identity)) {
-                $hidden++;
                 continue;
             }
 
@@ -69,12 +68,6 @@ class ReverseLookupPanel
         }
 
         $body = $items !== '' ? Html::tag('ul', $items, ['class' => 'freelink-linked-from']) : '';
-
-        if ($hidden > 0) {
-            $body .= Html::tag('p', Html::encode(Craft::t('freelink', '{count, plural, =1{# link} other{# links}} from elements you can’t view.', [
-                'count' => $hidden,
-            ])), ['class' => 'smalltext light']);
-        }
 
         $body .= Html::tag('p', Html::a(
             Html::encode(Craft::t('freelink', 'View all {count, number} {count, plural, =1{link} other{links}}', ['count' => $total])),

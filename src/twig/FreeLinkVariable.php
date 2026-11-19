@@ -65,6 +65,8 @@ class FreeLinkVariable
      */
     public function linksTo(ElementInterface $target, array $options = []): array
     {
+        $options['viewer'] = $this->cpViewer();
+
         return Plugin::getInstance()->links->findLinksTo($target, $options);
     }
 
@@ -73,6 +75,23 @@ class FreeLinkVariable
      */
     public function linkCountTo(ElementInterface $target): int
     {
-        return $target->id ? Plugin::getInstance()->linkIndex->countTo((int)$target->id) : 0;
+        return $target->id ? Plugin::getInstance()->linkIndex->countTo((int)$target->id, $this->cpViewer()) : 0;
+    }
+
+    /**
+     * In the control panel, results are limited to sources the signed-in user may view. Front-end
+     * templates are the site's own and are not filtered.
+     */
+    private function cpViewer(): ?\craft\elements\User
+    {
+        $request = Craft::$app->getRequest();
+
+        if ($request->getIsConsoleRequest() || !$request->getIsCpRequest()) {
+            return null;
+        }
+
+        $user = Craft::$app->getUser()->getIdentity();
+
+        return $user instanceof \craft\elements\User ? $user : null;
     }
 }

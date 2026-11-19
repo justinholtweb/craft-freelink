@@ -75,6 +75,7 @@ class LinkTools
         }
 
         $result = Plugin::getInstance()->linkIndex->find([
+            'viewer' => $user,
             'targetId' => $targetId,
             'targetSiteId' => $targetSiteId,
             'field' => $field,
@@ -165,6 +166,7 @@ class LinkTools
             throw new ToolCallException('Invalid domain.');
         }
 
+        $criteria['viewer'] = $user;
         $result = Plugin::getInstance()->linkIndex->find($criteria, $limit, $offset);
         $links = [];
 
@@ -231,6 +233,7 @@ class LinkTools
 
         $index = Plugin::getInstance()->linkIndex;
         $rows = $index->createQuery([
+            'viewer' => $user,
             'field' => $field,
             'siteId' => $siteId,
             'sourceId' => $ownerId,

@@ -6,6 +6,7 @@ use Craft;
 use craft\base\ElementInterface;
 use craft\db\Query;
 use craft\db\Table;
+use craft\elements\User;
 use craft\helpers\Db;
 use craft\helpers\ElementHelper;
 use craft\helpers\StringHelper;
@@ -344,7 +345,8 @@ class LinkIndex extends Component
      *
      * Criteria (all optional): targetId, targetSiteId, fieldId, field (handle), type, siteId,
      * sourceType (element class of the root source), sectionId (entry section of the root source),
-     * domain, status (`all`, `problems`, `ok`, `unchecked`, or a single status), sourceId.
+     * domain, status (`all`, `problems`, `ok`, `unchecked`, or a single status), sourceId, and
+     * viewer (a User: only links whose source they may view — see applyViewerScope()).
      *
      * @param array<string, mixed> $criteria
      * @return Query<int, array<string, mixed>>
@@ -407,6 +409,10 @@ class LinkIndex extends Component
 
         if (!empty($criteria['sourceType']) && is_string($criteria['sourceType'])) {
             $query->andWhere(['r.type' => $criteria['sourceType']]);
+        }
+
+        if (($criteria['viewer'] ?? null) instanceof User) {
+            $this->applyViewerScope($query, $criteria['viewer']);
         }
 
         if (!empty($criteria['ownerType']) && is_string($criteria['ownerType'])) {
@@ -493,9 +499,124 @@ class LinkIndex extends Component
     /**
      * Number of live links pointing at an element.
      */
-    public function countTo(int $targetId): int
+    public function countTo(int $targetId, ?User $viewer = null): int
     {
-        return (int)$this->createQuery(['targetId' => $targetId])->select(['i.id'])->count('*');
+        return (int)$this->createQuery(['targetId' => $targetId, 'viewer' => $viewer])->select(['i.id'])->count('*');
+    }
+
+    /**
+     * Limits a query to links whose top-level source the user may view, in SQL, so totals and
+     * pagination never count rows the user can't see.
+     *
+     * Mirrors Elements::canView() for the core element types (Entry, Asset, Category, User, GlobalSet,
+     * Tag): the type's own rules plus, on multi-site installs, `editSite:<site>` for localized ones.
+     * Sources of any other element type are left out for non-admins — stricter than canView(), never
+     * looser. Grants added through `Element::EVENT_AUTHORIZE_VIEW` aren't reflected.
+     *
+     * @param Query<int, array<string, mixed>> $query
+     */
+    public function applyViewerScope(Query $query, User $user): void
+    {
+        if ($user->admin) {
+            return;
+        }
+
+        $uid = (int)$user->id;
+        $or = ['or'];
+
+        // On a multi-site install, a localized element is only viewable on a site the user may
+        // edit (Elements::canView()'s site check). Index rows are per site, so check the row's.
+        $siteCheck = ['and'];
+        if (Craft::$app->getIsMultiSite()) {
+            $editSites = [];
+            foreach (Craft::$app->getSites()->getAllSites(true) as $site) {
+                if ($user->can("editSite:$site->uid")) {
+                    $editSites[] = (int)$site->id;
+                }
+            }
+            $siteCheck[] = ['i.ownerSiteId' => $editSites ?: [0]];
+        }
+
+        // Entries: viewEntries:<section>; another author's entry also needs viewPeerEntries
+        // (singles excepted).
+        $full = [];
+        $ownOnly = [];
+        foreach (Craft::$app->getEntries()->getAllSections() as $section) {
+            if (!$user->can("viewEntries:$section->uid")) {
+                continue;
+            }
+            if ($section->type === \craft\models\Section::TYPE_SINGLE || $user->can("viewPeerEntries:$section->uid")) {
+                $full[] = (int)$section->id;
+            } else {
+                $ownOnly[] = (int)$section->id;
+            }
+        }
+        if ($full || $ownOnly) {
+            $query->leftJoin(['rv_e' => Table::ENTRIES], '[[rv_e.id]] = [[i.rootOwnerId]]');
+            $entryOr = ['or'];
+            if ($full) {
+                $entryOr[] = ['rv_e.sectionId' => $full];
+            }
+            if ($ownOnly) {
+                $entryOr[] = ['and',
+                    ['rv_e.sectionId' => $ownOnly],
+                    ['exists', (new Query())->from(['rv_ea' => Table::ENTRIES_AUTHORS])->where('[[rv_ea.entryId]] = [[i.rootOwnerId]]')->andWhere(['rv_ea.authorId' => $uid])],
+                ];
+            }
+            $or[] = ['and', ['r.type' => \craft\elements\Entry::class], $entryOr, $siteCheck];
+        }
+
+        // Assets: your own need viewAssets:<volume>, anyone else's viewPeerAssets:<volume>.
+        $viewVolumes = [];
+        $peerVolumes = [];
+        foreach (Craft::$app->getVolumes()->getAllVolumes() as $volume) {
+            if ($user->can("viewAssets:$volume->uid")) {
+                $viewVolumes[] = (int)$volume->id;
+            }
+            if ($user->can("viewPeerAssets:$volume->uid")) {
+                $peerVolumes[] = (int)$volume->id;
+            }
+        }
+        if ($viewVolumes || $peerVolumes) {
+            $query->leftJoin(['rv_a' => Table::ASSETS], '[[rv_a.id]] = [[i.rootOwnerId]]');
+            $or[] = ['and', ['r.type' => \craft\elements\Asset::class], $siteCheck, ['or',
+                ['and', ['rv_a.uploaderId' => $uid], ['rv_a.volumeId' => $viewVolumes ?: [0]]],
+                ['and', ['or', ['not', ['rv_a.uploaderId' => $uid]], ['rv_a.uploaderId' => null]], ['rv_a.volumeId' => $peerVolumes ?: [0]]],
+            ]];
+        }
+
+        // Categories: viewCategories:<group>.
+        $groups = [];
+        foreach (Craft::$app->getCategories()->getAllGroups() as $group) {
+            if ($user->can("viewCategories:$group->uid")) {
+                $groups[] = (int)$group->id;
+            }
+        }
+        if ($groups) {
+            $query->leftJoin(['rv_c' => Table::CATEGORIES], '[[rv_c.id]] = [[i.rootOwnerId]]');
+            $or[] = ['and', ['r.type' => \craft\elements\Category::class], ['rv_c.groupId' => $groups], $siteCheck];
+        }
+
+        // Users: yourself, or anyone with viewUsers.
+        $or[] = $user->can('viewUsers')
+            ? ['r.type' => \craft\elements\User::class]
+            : ['and', ['r.type' => \craft\elements\User::class], ['r.id' => $uid]];
+
+        // Global sets: editGlobalSet:<uid>.
+        $sets = [];
+        foreach (Craft::$app->getGlobals()->getAllSets() as $set) {
+            if ($user->can("editGlobalSet:$set->uid")) {
+                $sets[] = (int)$set->id;
+            }
+        }
+        if ($sets) {
+            $or[] = ['and', ['r.type' => \craft\elements\GlobalSet::class], ['r.id' => $sets], $siteCheck];
+        }
+
+        // Tags: anyone.
+        $or[] = ['and', ['r.type' => \craft\elements\Tag::class], $siteCheck];
+
+        $query->andWhere($or);
     }
 
     /**

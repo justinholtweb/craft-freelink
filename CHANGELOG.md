@@ -25,7 +25,9 @@
   be one `<svg>` element and sanitised every time it is drawn).
 - A **Links** screen listing every FreeLink link on the site, filterable by link type, field, site,
   source element type, section, target domain and status, 50 per page. **Broken Links** shows only
-  the problems.
+  the problems. Links whose source element a user can't view are left out entirely — rows, totals
+  and pages — here, in the **Linked from** panel, in `craft.freelink.linksTo()` in the control panel,
+  and in the MCP tools.
 - Reverse lookups: "what links to this?" on the Links screen, a **Linked from** panel on element
   edit screens, `Plugin::getInstance()->links->findLinksTo($element)`, and
   `craft.freelink.linksTo(element)` / `craft.freelink.linkCountTo(element)` in Twig.
