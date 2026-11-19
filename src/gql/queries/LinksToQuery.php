@@ -83,9 +83,12 @@ class LinksToQuery extends Query
             }
         }
 
+        // …and the target must be readable on the site each link resolves on (its target site, or
+        // its source's site), not just on some site.
         return array_values(array_filter(
             $references,
-            fn($ref) => isset($allowed[$ref->sourceSiteId . ':' . $ref->rootSourceId]),
+            fn($ref) => isset($allowed[$ref->sourceSiteId . ':' . $ref->rootSourceId])
+                && GqlScope::canQuery($elementId, (int)($ref->targetSiteId ?: $ref->sourceSiteId)),
         ));
     }
 }

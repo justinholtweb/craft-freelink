@@ -33,6 +33,13 @@ class Link extends Model implements JsonSerializable
     public ?string $icon = null;
 
     /**
+     * The site of the element holding this link, set when the field value is normalized for an
+     * element. Runtime only (never stored): it's the site an element link without a target site
+     * resolves on, for permission checks.
+     */
+    public ?int $ownerSiteId = null;
+
+    /**
      * Returns the display name for this link type.
      */
     public static function displayName(): string

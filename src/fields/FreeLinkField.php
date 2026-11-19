@@ -381,6 +381,10 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
 
             $link = $linksService->createLink($linkData);
 
+            if ($link && $element?->siteId) {
+                $link->ownerSiteId = (int)$element->siteId;
+            }
+
             if ($link) {
                 $links[] = $link;
             }
@@ -870,7 +874,10 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
             return true;
         }
 
-        if (GqlScope::isActive() && !GqlScope::canQuery((int)$link->targetId)) {
+        // The target site the link resolves on: its own, or the owner's.
+        $targetSiteId = $link->targetSiteId ?: ($owner->siteId ? (int)$owner->siteId : null);
+
+        if (GqlScope::isActive() && !GqlScope::canQuery((int)$link->targetId, $targetSiteId)) {
             return false;
         }
 

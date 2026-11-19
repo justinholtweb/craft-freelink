@@ -8,6 +8,7 @@ use craft\db\Query;
 use craft\db\Table;
 use craft\elements\db\ElementQueryInterface;
 use craft\errors\GqlException;
+use craft\helpers\Gql as GqlHelper;
 
 /**
  * What the active GraphQL schema may read, decided by Craft's own element resolvers (which apply the
@@ -44,7 +45,19 @@ class GqlScope
     }
 
     /**
-     * The subset of element IDs the active schema may query.
+     * IDs of the sites the active schema may read (`sites.<uid>:read`). Craft applies this when a
+     * query runs, not in the resolvers' prepareQuery(), so FreeLink applies it itself.
+     *
+     * @return int[]
+     */
+    public static function allowedSiteIds(): array
+    {
+        return array_values(array_map(fn($site) => (int)$site->id, GqlHelper::getAllowedSites()));
+    }
+
+    /**
+     * The subset of element IDs the active schema may query — on `$siteId` when given (it must be a
+     * site the schema can read), otherwise on any site the schema can read.
      *
      * @param int[] $ids
      * @return int[]
@@ -54,6 +67,16 @@ class GqlScope
         $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
 
         if (!$ids) {
+            return [];
+        }
+
+        $allowedSites = self::allowedSiteIds();
+
+        if ($siteId !== null && !in_array($siteId, $allowedSites, true)) {
+            return [];
+        }
+
+        if (!$allowedSites) {
             return [];
         }
 
@@ -78,10 +101,7 @@ class GqlScope
             }
 
             // Any status: a schema can always ask for disabled/pending elements with `status: null`.
-            $arguments = ['id' => $classIds, 'status' => null];
-            if ($siteId) {
-                $arguments['siteId'] = $siteId;
-            }
+            $arguments = ['id' => $classIds, 'status' => null, 'siteId' => $siteId ?? $allowedSites];
 
             try {
                 $query = $resolver::prepareQuery(null, $arguments);
@@ -91,6 +111,10 @@ class GqlScope
 
             if (!$query instanceof ElementQueryInterface) {
                 continue;
+            }
+
+            if ($siteId === null && method_exists($query, 'unique')) {
+                $query->unique();
             }
 
             foreach ($query->ids() as $id) {

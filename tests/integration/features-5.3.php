@@ -144,6 +144,24 @@ function indexRows(int $ownerId): array
 $server = null;
 
 /**
+ * Schemas must name the sites they may read (Craft enforces it on every request); test schemas get
+ * the primary site unless they name sites themselves.
+ *
+ * @param string[] $scope
+ * @return string[]
+ */
+function withSiteScope(array $scope): array
+{
+    foreach ($scope as $item) {
+        if (str_starts_with($item, 'sites.')) {
+            return $scope;
+        }
+    }
+    $scope[] = 'sites.' . Craft::$app->getSites()->getPrimarySite()->uid . ':read';
+    return $scope;
+}
+
+/**
  * Runs one GraphQL request against an in-memory schema in a fresh PHP process. Craft can't rebuild a
  * schema several times in one process ("multiple types named QueryArgument", FreeLink or not).
  *
@@ -152,6 +170,7 @@ $server = null;
  */
 function gqlRun(array $scope, string $query): array
 {
+    $scope = withSiteScope($scope);
     $script = sys_get_temp_dir() . '/freelink-gql-' . getmypid() . '.php';
     file_put_contents($script, '<?php
         chdir(' . var_export(getcwd(), true) . ');
@@ -761,7 +780,7 @@ $gql = Craft::$app->getGql();
 $sectionUid = $testSection->uid;
 $schemaFor = function(array $scope) use ($gql): GqlSchema {
     $gql->flushCaches();
-    return new GqlSchema(['name' => 'FreeLink test', 'scope' => $scope, 'isPublic' => false]);
+    return new GqlSchema(['name' => 'FreeLink test', 'scope' => withSiteScope($scope), 'isPublic' => false]);
 };
 $mutationName = "save_testEntries_{$testType->handle}_Entry";
 
@@ -812,6 +831,80 @@ check('GraphQL hides the URL and title of a target the schema can’t query', fu
     $link2 = $r2['data']['entry']['freelinkItTest'][0] ?? null;
     return $link && $link['url'] === null && $link['text'] === null && $link2 && $link2['text'] === $news->title
         ?: json_encode([$link, $link2]);
+});
+
+// A target that exists in two sites, and a schema that may read only one of them.
+$sites = Craft::$app->getSites()->getAllSites();
+$siteA = Craft::$app->getSites()->getPrimarySite();
+$siteB = null;
+foreach ($sites as $site) {
+    if ($site->id !== $siteA->id) {
+        $siteB = $site;
+        break;
+    }
+}
+$twoSiteTarget = $siteB ? Entry::find()->section('portfolio')->siteId($siteA->id)->status(null)
+    ->innerJoin(['b' => '{{%elements_sites}}'], '[[b.elementId]] = [[elements.id]] AND [[b.siteId]] = ' . (int)$siteB->id)
+    ->one() : null;
+$portfolioUid = Craft::$app->getEntries()->getSectionByHandle('portfolio')?->uid;
+$siteAOnly = ["sections.$sectionUid:read", "sections.$sectionUid:save", "sections.$sectionUid:create", "sections.$portfolioUid:read", "sites.$siteA->uid:read", 'freelinkLinks:read'];
+
+check('GqlScope and TargetVisibility honour the schema’s sites (target site, else owner site)', function() use ($gql, $schemaFor, $siteAOnly, $twoSiteTarget, $siteA, $siteB, $plugin) {
+    if (!$twoSiteTarget) {
+        return 'needs an entry in two sites';
+    }
+    $link = function(?int $targetSite, ?int $ownerSite) use ($plugin, $twoSiteTarget) {
+        $l = $plugin->links->createLink(['type' => 'entry', 'targetId' => $twoSiteTarget->id, 'targetSiteId' => $targetSite]);
+        $l->ownerSiteId = $ownerSite;
+        return $l;
+    };
+    $gql->setActiveSchema($schemaFor($siteAOnly));
+    try {
+        $r = [
+            justinholtweb\freelink\gql\GqlScope::canQuery($twoSiteTarget->id, $siteA->id),
+            justinholtweb\freelink\gql\GqlScope::canQuery($twoSiteTarget->id, $siteB->id),
+            justinholtweb\freelink\helpers\TargetVisibility::canSee($link($siteA->id, null)),
+            justinholtweb\freelink\helpers\TargetVisibility::canSee($link($siteB->id, $siteA->id)),
+            justinholtweb\freelink\helpers\TargetVisibility::canSee($link(null, $siteA->id)),
+            justinholtweb\freelink\helpers\TargetVisibility::canSee($link(null, $siteB->id)),
+        ];
+        $gql->setActiveSchema($schemaFor([...$siteAOnly, "sites.$siteB->uid:read"]));
+        $r[] = justinholtweb\freelink\gql\GqlScope::canQuery($twoSiteTarget->id, $siteB->id);
+    } finally {
+        $gql->setActiveSchema(null);
+    }
+    return $r === [true, false, true, false, true, false, true] ?: json_encode($r);
+});
+
+check('mutation: a link to the target’s copy on a site the schema can’t read is refused; the readable site’s copy saves', function() use ($siteAOnly, $mutationName, $twoSiteTarget, $siteA, $siteB, &$created) {
+    if (!$twoSiteTarget) {
+        return 'needs an entry in two sites';
+    }
+    $refused = gqlRun($siteAOnly, "mutation { $mutationName(title: \"FL53 site B\", freelinkItTest: [{type: \"entry\", targetId: {$twoSiteTarget->id}, targetSiteId: {$siteB->id}}]) { id } }");
+    $ok = gqlRun($siteAOnly, "mutation { $mutationName(title: \"FL53 site A\", freelinkItTest: [{type: \"entry\", targetId: {$twoSiteTarget->id}, targetSiteId: {$siteA->id}}]) { id freelinkItTest { elementSiteId text } } }");
+    if (isset($ok['data'][$mutationName]['id'])) {
+        $created[] = (int)$ok['data'][$mutationName]['id'];
+    }
+    if (isset($refused['data'][$mutationName]['id'])) {
+        $created[] = (int)$refused['data'][$mutationName]['id'];
+    }
+    return !empty($refused['errors']) && empty($refused['data'][$mutationName]['id'])
+        && ($ok['data'][$mutationName]['freelinkItTest'][0]['elementSiteId'] ?? null) === $siteA->id
+        ?: json_encode([$refused, $ok]);
+});
+
+check('freelinkLinksTo leaves out links that resolve on a site the schema can’t read; output hides that copy', function() use ($siteAOnly, $twoSiteTarget, $siteA, $siteB) {
+    if (!$twoSiteTarget) {
+        return 'needs an entry in two sites';
+    }
+    $onA = makeEntry('FL53 links to site A copy', [], [['type' => 'entry', 'targetId' => $twoSiteTarget->id, 'targetSiteId' => $siteA->id]]);
+    $onB = makeEntry('FL53 links to site B copy', [], [['type' => 'entry', 'targetId' => $twoSiteTarget->id, 'targetSiteId' => $siteB->id]]);
+    $r = gqlRun($siteAOnly, "{ freelinkLinksTo(elementId: {$twoSiteTarget->id}) { sourceId } }");
+    $ids = array_column($r['data']['freelinkLinksTo'] ?? [], 'sourceId');
+    $out = gqlRun($siteAOnly, "{ entry(id: {$onB->id}) { ... on {$GLOBALS['testType']->handle}_Entry { freelinkItTest { url text } } } }");
+    $hidden = $out['data']['entry']['freelinkItTest'][0] ?? null;
+    return in_array($onA->id, $ids, true) && !in_array($onB->id, $ids, true) && $hidden && $hidden['url'] === null && $hidden['text'] === null
+        ?: json_encode([$ids, $hidden, $r['errors'] ?? null]);
 });
 
 check('GqlScope keeps only sources the schema can query', function() use ($schemaFor, $gql, $sectionUid, $owner) {

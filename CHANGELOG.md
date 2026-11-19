@@ -51,7 +51,9 @@
   link must point at an element the person or GraphQL schema saving can view. Min/max, required and
   selection conditions stay checks for live saves only.
 - The field input, GraphQL (`url`, `text`) and MCP output no longer show the title or URL of a linked
-  element the current user or schema can't view. The field input keeps the link as it is, labelled
+  element the current user or schema can't view. GraphQL checks the site too: a link to an element's
+  copy on a site the schema can't read is hidden (and refused in a mutation), even if the element
+  exists on a site it can. The field input keeps the link as it is, labelled
   "An element you can't view", so saving doesn't drop it.
 
 ### Fixed
