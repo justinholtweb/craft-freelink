@@ -173,7 +173,11 @@ class CraftLinkMigrator extends BaseMigrator
                         }
 
                         if ($changed && $row->draftId === null && $row->revisionId === null) {
-                            $owners[(int) $row->elementId] = (string) $row->type;
+                            foreach ($uids as $uid) {
+                                if (is_array($content[$uid] ?? null)) {
+                                    $owners[] = [(int) $row->elementId, (string) $row->type, (int) $row->siteId, $content[$uid]];
+                                }
+                            }
                         }
                     }
                 }
@@ -199,11 +203,19 @@ class CraftLinkMigrator extends BaseMigrator
             return true;
         }
 
-        // The link index follows the new field values (live content only).
+        // The link index follows the new field values (live content only). Field layouts loaded
+        // earlier in this request still hold the old field, so the new field indexes the values.
+        Fields::refreshFields();
+        $field = Fields::getFieldById($fieldId);
         $index = app(LinkIndex::class);
-        foreach ($owners as $elementId => $type) {
+
+        foreach ($owners as [$elementId, $type, $siteId, $json]) {
             try {
-                $index->indexElementId($elementId, $type);
+                $element = class_exists($type) ? $type::find()->id($elementId)->siteId($siteId)->status(null)->one() : null;
+
+                if ($field instanceof FreeLinkField && $element) {
+                    $index->indexValue($field, $element, $field->normalizeValue($json, $element));
+                }
             } catch (Throwable $e) {
                 $this->log("  Couldn’t index element $elementId: {$e->getMessage()}");
             }

@@ -84,7 +84,6 @@ class CurlTransport implements HttpTransport
         $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $errno = curl_errno($ch);
         $error = $errno ? curl_error($ch) : null;
-        curl_close($ch);
 
         // A write abort after the headers arrived is our byte cap, not a failure.
         if ($code > 0 && ($ok !== false || $errno === CURLE_WRITE_ERROR)) {
