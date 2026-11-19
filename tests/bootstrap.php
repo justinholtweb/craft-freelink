@@ -1,89 +1,63 @@
 <?php
 
+declare(strict_types=1);
+
+use CraftCms\Cms\Translation\I18N;
+use Illuminate\Config\Repository;
+use Illuminate\Container\Container;
+use Illuminate\Events\Dispatcher;
+use Illuminate\Support\Facades\Facade;
+use Illuminate\Translation\ArrayLoader;
+use Illuminate\Translation\Translator;
+use Illuminate\Validation\Factory;
+use JustinHoltWeb\FreeLink\Helpers\Icons;
+use JustinHoltWeb\FreeLink\Services\Links;
+use Psr\Log\NullLogger;
+
 /**
- * PHPUnit bootstrap for the FreeLink plugin.
+ * Test bootstrap.
  *
- * The link models extend yii\base\Model and lean on a few Craft helper classes
- * (some of which read Craft::$app), so the tests need a Composer autoloader that
- * exposes the Craft/Yii class tree as well as the plugin's own classes.
- *
- * Autoloader resolution order:
- *   1. FREELINK_AUTOLOAD env var — point this at a host project's
- *      vendor/autoload.php when the plugin is symlinked into a dev install
- *      (e.g. a DDEV test site).
- *   2. The plugin's own vendor/ (composer install run inside the plugin).
- *   3. The standard location when the plugin is installed as a dependency.
- *
- * When a full Craft install is reachable, a Craft console application is booted
- * so that helpers depending on Craft::$app work. If no Craft project is present
- * the suite still runs against a minimal Yii alias — only the tests that need a
- * booted app are affected.
+ * The unit suite runs without booting Craft: the link models, the field's normalising and schemas,
+ * the CP control mapping, the SSRF guard, IP ranges, the checker's redirect logic (scripted
+ * transport) and the index rows are plain PHP over plain data. Everything that needs a database or
+ * a request is checked live in the plugin-testing-craft6 harness (see tests/README.md).
  */
 
-$autoload = null;
+require_once __DIR__.'/../vendor/autoload.php';
 
-$candidates = array_filter([
-    getenv('FREELINK_AUTOLOAD') ?: null,
-    __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../../autoload.php',
-    dirname(__DIR__, 4) . '/vendor/autoload.php',
-]);
+ini_set('date.timezone', 'UTC');
+date_default_timezone_set('UTC');
 
-foreach ($candidates as $path) {
-    if (is_file($path)) {
-        $autoload = $path;
-        require $path;
-        break;
+// Just enough container for the facades, validators and translations the pure code touches.
+$container = new Container;
+Container::setInstance($container);
+Facade::setFacadeApplication($container); // @phpstan-ignore argument.type
+$translator = new Translator(new ArrayLoader, 'en');
+$container->instance('translator', $translator);
+$container->instance(Illuminate\Contracts\Validation\Factory::class, new Factory($translator, $container));
+$container->alias(Illuminate\Contracts\Validation\Factory::class, 'validator');
+$container->instance('events', new Dispatcher($container));
+$container->instance('config', new Repository([]));
+$container->instance('log', new NullLogger);
+$container->singleton(Links::class);
+
+// `t()` → I18N::translate(): format ICU messages without Craft's message sources.
+$container->instance(I18N::class, new class
+{
+    /** @param array<string, mixed> $parameters */
+    public function translate(mixed $message, array $parameters = [], ?string $category = null, ?string $locale = null): string
+    {
+        $message = (string) $message;
+
+        if ($parameters === []) {
+            return $message;
+        }
+
+        return class_exists(MessageFormatter::class)
+            ? (string) MessageFormatter::formatMessage('en', $message, $parameters)
+            : strtr($message, array_combine(array_map(fn ($k) => '{'.$k.'}', array_keys($parameters)), array_map('strval', $parameters)));
     }
-}
+});
 
-if ($autoload === null) {
-    fwrite(
-        STDERR,
-        "Unable to locate a Composer autoloader for the FreeLink test suite.\n" .
-        "Set the FREELINK_AUTOLOAD environment variable to a vendor/autoload.php\n" .
-        "that includes craftcms/cms, or run `composer install` inside the plugin.\n",
-    );
-    exit(1);
-}
-
-$vendorDir = dirname($autoload);
-
-// Boot a Craft console application when one is reachable, so helpers that read
-// Craft::$app (Template::raw, element queries, etc.) work. Craft's bootstrap
-// also defines the `Yii`/`Craft` class aliases.
-$consoleBootstrap = $vendorDir . '/craftcms/cms/bootstrap/console.php';
-
-if (is_file($consoleBootstrap) && (!class_exists('Craft', false) || Craft::$app === null)) {
-    $basePath = getenv('CRAFT_BASE_PATH') ?: dirname($vendorDir);
-
-    if (!defined('CRAFT_BASE_PATH')) {
-        define('CRAFT_BASE_PATH', $basePath);
-    }
-    if (!defined('CRAFT_VENDOR_PATH')) {
-        define('CRAFT_VENDOR_PATH', $vendorDir);
-    }
-
-    // Load the project's .env so the app can find its DB/config settings.
-    if (class_exists(Dotenv\Dotenv::class) && is_file($basePath . '/.env')) {
-        Dotenv\Dotenv::createUnsafeMutable($basePath)->safeLoad();
-    }
-
-    try {
-        // Returns a configured craft\console\Application and sets Craft::$app.
-        require $consoleBootstrap;
-    } catch (\Throwable $e) {
-        fwrite(STDERR, "Notice: could not boot Craft for tests ({$e->getMessage()}).\n");
-        fwrite(STDERR, "Tests that depend on a booted Craft application will be skipped.\n");
-    }
-}
-
-// Fallback for a standalone run with no Craft install: yii2's Yii.php is a
-// bootstrap file (not classmap-autoloaded), so register the `Yii` alias here so
-// Event/BaseObject constructors work.
-if (!class_exists('Yii', false)) {
-    $yii = $vendorDir . '/yiisoft/yii2/Yii.php';
-    if (is_file($yii)) {
-        require $yii;
-    }
-}
+// Craft's bundled icons, straight from the package (no Craft app to ask).
+Icons::$basePath = __DIR__.'/../vendor/craftcms/cms-assets/resources/icons';

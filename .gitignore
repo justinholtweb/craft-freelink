@@ -1,14 +1,9 @@
 CLAUDE.md
-
+.claude/
 .DS_Store
-
 /vendor
 composer.lock
 .phpunit.result.cache
 .phpunit.cache
-
-# Local DDEV test harness (not shipped with the plugin)
 /.ddev
-
-# Craft runtime artifacts from running the test suite in-place
 /storage

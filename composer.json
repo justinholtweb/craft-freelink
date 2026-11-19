@@ -1,7 +1,7 @@
 {
     "name": "justinholtweb/craft-freelink",
-    "version": "5.3.0",
-    "description": "A powerful, lightweight link field for Craft CMS 5 with hybrid storage, proper element relations, and migration paths from popular link plugins.",
+    "version": "6.0.0-beta.1",
+    "description": "A powerful, lightweight link field for Craft CMS 6 with hybrid storage, proper element relations, a link index with broken-link checks, and migration from Craft's Link field.",
     "type": "craft-plugin",
     "license": "proprietary",
     "keywords": [
@@ -13,56 +13,69 @@
         "url",
         "fields"
     ],
+    "authors": [
+        {
+            "name": "Justin Holt",
+            "homepage": "https://justinholt.com"
+        }
+    ],
     "support": {
         "email": "justin@justinholt.com",
         "issues": "https://github.com/justinholtweb/craft-freelink/issues",
         "source": "https://github.com/justinholtweb/craft-freelink",
-        "docs": "https://github.com/justinholtweb/craft-freelink/blob/main/README.md",
-        "changelog": "https://raw.githubusercontent.com/justinholtweb/craft-freelink/main/CHANGELOG.md"
+        "docs": "https://github.com/justinholtweb/craft-freelink/blob/6.0.0/README.md",
+        "changelog": "https://raw.githubusercontent.com/justinholtweb/craft-freelink/6.0.0/CHANGELOG.md"
     },
-    "minimum-stability": "dev",
-    "prefer-stable": true,
     "require": {
-        "php": "^8.2",
-        "craftcms/cms": "^5.0.0"
+        "php": "^8.5",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "craftcms/cms": "^6.0.0-beta.1"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5",
-        "craftcms/phpstan": "dev-main",
-        "phpstan/phpstan": "^1.12",
-        "craftcms/ecs": "dev-main"
+        "larastan/larastan": "^3.13",
+        "laravel/pint": "^1.22",
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^5.0",
+        "pestphp/pest-plugin-laravel": "^5.0",
+        "phpstan/phpstan": "^2.1"
     },
     "autoload": {
         "psr-4": {
-            "justinholtweb\\freelink\\": "src/"
+            "JustinHoltWeb\\FreeLink\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "justinholtweb\\freelink\\tests\\": "tests/"
+            "JustinHoltWeb\\FreeLink\\Tests\\": "tests/"
         }
     },
     "scripts": {
-        "test": "phpunit",
+        "test": "pest",
         "phpstan": "phpstan analyse --memory-limit=1G",
-        "check-cs": "ecs check --ansi",
-        "fix-cs": "ecs check --ansi --fix"
-    },
-    "extra": {
-        "name": "FreeLink",
-        "handle": "freelink",
-        "hasCpSettings": true,
-        "hasCpSection": true,
-        "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-freelink/main/CHANGELOG.md",
-        "class": "justinholtweb\\freelink\\Plugin",
-        "developer": "Justin Holt",
-        "developerUrl": "https://justinholt.com",
-        "documentationUrl": "https://github.com/justinholtweb/craft-freelink/blob/main/README.md"
+        "check-cs": "pint --test",
+        "fix-cs": "pint"
     },
     "config": {
         "allow-plugins": {
-            "yiisoft/yii2-composer": true,
-            "craftcms/plugin-installer": true
-        }
+            "craftcms/plugin-installer": true,
+            "pestphp/pest-plugin": true
+        },
+        "platform": {
+            "php": "8.5"
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "beta",
+    "prefer-stable": true,
+    "extra": {
+        "name": "FreeLink",
+        "handle": "freelink",
+        "class": "JustinHoltWeb\\FreeLink\\Plugin",
+        "developer": "Justin Holt",
+        "developerUrl": "https://justinholt.com",
+        "documentationUrl": "https://github.com/justinholtweb/craft-freelink/blob/6.0.0/README.md",
+        "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-freelink/6.0.0/CHANGELOG.md"
     }
 }

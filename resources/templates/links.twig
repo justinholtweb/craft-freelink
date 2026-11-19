@@ -1,0 +1,170 @@
+{# FreeLink → Links / Broken Links. A partial rendered inside CpScreenResponse::contentTemplate(). #}
+{% set statusLabels = {
+    live: 'Live'|t('freelink'),
+    missing: 'Target deleted'|t('freelink'),
+    trashed: 'Target in trash'|t('freelink'),
+    disabled: 'Target disabled'|t('freelink'),
+    pending: 'Target not yet published'|t('freelink'),
+    expired: 'Target expired'|t('freelink'),
+    ok: 'OK'|t('freelink'),
+    redirect: 'Redirects'|t('freelink'),
+    broken: 'Broken'|t('freelink'),
+    error: 'Error'|t('freelink'),
+    blocked: 'Refused'|t('freelink'),
+    unchecked: 'Not checked yet'|t('freelink'),
+    'n/a': 'Not checked'|t('freelink'),
+} %}
+{% set statusColours = {
+    live: 'green', ok: 'green', redirect: 'orange',
+    missing: 'red', trashed: 'red', broken: 'red', blocked: 'red',
+    disabled: 'orange', pending: 'orange', expired: 'orange', error: 'orange',
+    unchecked: 'disabled', 'n/a': 'disabled',
+} %}
+{% macro select(name, label, value, options) %}
+    <div class="field freelink-filter">
+        <label for="freelink-filter-{{ name }}">{{ label }}</label>
+        <select id="freelink-filter-{{ name }}" name="{{ name }}">
+            {% for option in options %}
+                <option value="{{ option.value }}"{% if option.value ~ '' == value ~ '' %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+{% endmacro %}
+
+<div class="freelink-links" data-freelink-links>
+    <div class="freelink-actions" style="display:flex; gap: 8px; justify-content:flex-end; margin-bottom: 16px;">
+        {% if isAdmin %}
+            <form method="post" action="{{ cpUrl('freelink/links/reindex') }}">
+                {{ csrf_field() }}
+                <button type="submit" class="btn">{{ 'Rebuild index'|t('freelink') }}</button>
+            </form>
+        {% endif %}
+        {% if canCheck and settings.enableExternalChecks %}
+            <form method="post" action="{{ cpUrl('freelink/links/queue-check') }}">
+                {{ csrf_field() }}
+                <button type="submit" class="btn submit">{{ 'Check links now'|t('freelink') }}</button>
+            </form>
+        {% endif %}
+    </div>
+
+    {% if not indexBuilt %}
+        <p class="freelink-notice">{{ 'The link index is being built. Links saved before FreeLink 5.3 appear here once the “Indexing FreeLink links” queue job has run.'|t('freelink') }}</p>
+    {% endif %}
+
+    {% if targetElement or filters.target %}
+        <div class="freelink-target" style="display:flex; gap: 8px; align-items:center; margin-bottom: 12px;">
+            <span>{{ 'Links to'|t('freelink') }}</span>
+            {% if targetElement %}
+                {{ elementChip(targetElement) }}
+            {% else %}
+                <span class="light">{{ 'Element #{id}'|t('freelink', {id: filters.target}) }}</span>
+            {% endif %}
+            <a href="{{ cpUrl(path, baseParams|filter((v, k) => k != 'target')) }}" class="btn small">{{ 'Show all links'|t('freelink') }}</a>
+        </div>
+    {% endif %}
+
+    <form method="get" action="{{ cpUrl(path) }}" class="freelink-filters" style="display:flex; flex-wrap:wrap; gap: 8px 16px; align-items:flex-end; margin-bottom: 24px;">
+        {% if filters.target %}<input type="hidden" name="target" value="{{ filters.target }}">{% endif %}
+        {% set all = [{label: 'All'|t('freelink'), value: ''}] %}
+        {{ _self.select('status', 'Status'|t('freelink'), filters.status, [
+            {label: 'All'|t('freelink'), value: 'all'},
+            {label: 'Problems'|t('freelink'), value: 'problems'},
+            {label: 'OK'|t('freelink'), value: 'ok'},
+            {label: 'Not checked yet'|t('freelink'), value: 'unchecked'},
+        ]) }}
+        {{ _self.select('type', 'Link Type'|t('freelink'), filters.type, all|merge(typeOptions)) }}
+        {{ _self.select('field', 'Field'|t('freelink'), filters.field, all|merge(fieldOptions)) }}
+        {% if siteOptions|length %}{{ _self.select('site', 'Site'|t('freelink'), filters.site, all|merge(siteOptions)) }}{% endif %}
+        {{ _self.select('source', 'Source'|t('freelink'), filters.source, all|merge(sourceOptions)) }}
+        {% if sectionOptions|length %}{{ _self.select('section', 'Section'|t('freelink'), filters.section, all|merge(sectionOptions)) }}{% endif %}
+        <div class="field freelink-filter">
+            <label for="freelink-filter-domain">{{ 'Domain'|t('freelink') }}</label>
+            <input type="text" class="text" id="freelink-filter-domain" name="domain" value="{{ filters.domain }}" placeholder="example.com" size="18">
+        </div>
+        <div class="field">
+            <button type="submit" class="btn">{{ 'Filter'|t('freelink') }}</button>
+            <a class="btn" href="{{ cpUrl(path) }}">{{ 'Reset'|t('freelink') }}</a>
+        </div>
+    </form>
+
+    {% if rows|length %}
+        <table class="data fullwidth freelink-links-table">
+            <thead>
+                <tr>
+                    <th scope="col">{{ 'Source'|t('freelink') }}</th>
+                    <th scope="col">{{ 'Field'|t('freelink') }}</th>
+                    <th scope="col">{{ 'Type'|t('freelink') }}</th>
+                    <th scope="col">{{ 'Target'|t('freelink') }}</th>
+                    <th scope="col">{{ 'Status'|t('freelink') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    {% set ref = row.ref %}
+                    {% set status = ref.getStatus() %}
+                    <tr data-id="{{ ref.id }}" data-status="{{ status }}">
+                        <th scope="row">
+                            {% if row.root %}
+                                {{ elementChip(row.root) }}
+                                {% if row.nested %}<div class="smalltext light">{{ 'In a nested element'|t('freelink') }}</div>{% endif %}
+                            {% else %}
+                                <span class="light">{{ 'A source you can’t view'|t('freelink') }}</span>
+                            {% endif %}
+                        </th>
+                        <td>{{ row.field ? row.field.name : '' }}{% if row.field %}<div class="smalltext light"><code>{{ row.field.handle }}</code></div>{% endif %}</td>
+                        <td><code>{{ ref.type }}</code></td>
+                        <td>
+                            {% if ref.isElement %}
+                                {% if row.target %}
+                                    {{ elementChip(row.target) }}
+                                {% elseif ref.targetId %}
+                                    <span class="light">{{ 'Element #{id}'|t('freelink', {id: ref.targetId}) }}</span>
+                                {% else %}
+                                    <span class="light">{{ 'Deleted element'|t('freelink') }}</span>
+                                {% endif %}
+                            {% elseif ref.url %}
+                                {% if ref.host %}
+                                    <a href="{{ ref.url }}" target="_blank" rel="noopener noreferrer" title="{{ ref.url }}">{{ ref.url|length > 70 ? ref.url|slice(0, 70) ~ '…' : ref.url }}</a>
+                                {% else %}
+                                    <code>{{ ref.url|length > 70 ? ref.url|slice(0, 70) ~ '…' : ref.url }}</code>
+                                {% endif %}
+                            {% else %}
+                                <span class="light">{{ 'No URL'|t('freelink') }}</span>
+                            {% endif %}
+                            {% if ref.label %}<div class="smalltext light">{{ ref.label }}</div>{% endif %}
+                        </td>
+                        <td>
+                            <span class="status {{ statusColours[status] ?? 'disabled' }}" role="img" aria-label="{{ statusLabels[status] ?? status }}"></span>
+                            {{ statusLabels[status] ?? status }}
+                            {% if ref.httpCode %}<span class="light">({{ ref.httpCode }})</span>{% endif %}
+                            {% if ref.checkError %}<div class="smalltext light">{{ ref.checkError }}</div>{% endif %}
+                            {% if ref.finalUrl %}<div class="smalltext light" title="{{ ref.finalUrl }}">→ {{ ref.finalUrl|length > 50 ? ref.finalUrl|slice(0, 50) ~ '…' : ref.finalUrl }}</div>{% endif %}
+                            {% if ref.checkedAt %}<div class="smalltext light">{{ ref.checkedAt|datetime('short') }}</div>{% endif %}
+                            {% if ref.isElement and ref.targetId %}
+                                <div class="smalltext"><a href="{{ cpUrl('freelink/links', {target: ref.targetId}) }}">{{ 'All links to this'|t('freelink') }}</a></div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="zilch">{{ 'No links match these filters.'|t('freelink') }}</p>
+    {% endif %}
+
+    <div class="freelink-pagination" style="display:flex; gap: 12px; align-items:center; margin-top: 16px;">
+        {% if pageInfo.prevUrl %}<a class="btn small" rel="prev" href="{{ pageInfo.prevUrl }}">{{ 'Previous'|t('freelink') }}</a>{% endif %}
+        <span class="light" data-freelink-page>{{ '{first, number}–{last, number} of {total, number} links'|t('freelink', {first: pageInfo.first, last: pageInfo.last, total: pageInfo.total}) }}</span>
+        {% if pageInfo.nextUrl %}<a class="btn small" rel="next" href="{{ pageInfo.nextUrl }}">{{ 'Next'|t('freelink') }}</a>{% endif %}
+    </div>
+
+    <p class="light smalltext" style="margin-top: 16px;">
+        {% if not settings.enableExternalChecks %}
+            {{ 'External link checks are turned off. Element links are still checked against the database.'|t('freelink') }}
+        {% elseif lastChecked %}
+            {{ 'URLs last checked {date}.'|t('freelink', {date: lastChecked|datetime('short')}) }}
+        {% else %}
+            {{ 'URLs haven’t been checked yet.'|t('freelink') }}
+        {% endif %}
+    </p>
+</div>

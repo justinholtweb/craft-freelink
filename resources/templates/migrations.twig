@@ -1,0 +1,79 @@
+{# FreeLink → Migrations. A partial rendered inside CpScreenResponse::contentTemplate(). #}
+<div class="freelink-migrations">
+    <p>{{ 'Convert link fields of another type into FreeLink fields, with their content. Run a dry run first: it reports what would change and writes nothing. Back up the database before a real run.'|t('freelink') }}</p>
+
+    {% if lastRun %}
+        <h2>{{ lastRun.dryRun ? 'Last dry run'|t('freelink') : 'Last migration'|t('freelink') }}: {{ labels[lastRun.source] ?? lastRun.source }}{% if lastRun.field %} — <code>{{ lastRun.field }}</code>{% endif %}</h2>
+        <pre class="freelink-migration-log" style="max-height: 320px; overflow:auto; padding: 12px; border-radius: 4px; background: var(--gray-050, #f3f7fc);">{{ lastRun.log|join("\n") }}</pre>
+        <hr>
+    {% endif %}
+
+    <h2>{{ 'Available migrations'|t('freelink') }}</h2>
+
+    {% if available|length %}
+        {% if not allowAdminChanges %}
+            <p class="warning">{{ 'Migrations change field types, so they can only run where admin changes are allowed.'|t('freelink') }}</p>
+        {% endif %}
+
+        {% for key, info in available %}
+            <div class="freelink-migration" data-source="{{ key }}" style="margin-bottom: 32px;">
+                <h3>{{ labels[key] ?? info.label }} <span class="light">— {{ '{count, plural, =1{# field} other{# fields}} found'|t('freelink', {count: info.fieldCount}) }}</span></h3>
+
+                {% if allowAdminChanges %}
+                    <form method="post" action="{{ cpUrl('freelink/migrations/run') }}">
+                        {{ csrf_field() }}
+                        <input type="hidden" name="source" value="{{ key }}">
+                        <div class="field">
+                            <label for="freelink-migrate-field-{{ key }}">{{ 'Field handle'|t('freelink') }}</label>
+                            <div class="instructions">{{ 'Leave blank to migrate every field of this type.'|t('freelink') }}</div>
+                            <input type="text" class="text" id="freelink-migrate-field-{{ key }}" name="field" size="30">
+                        </div>
+                        <div class="field">
+                            <input type="hidden" name="dryRun" value="0">
+                            <label><input type="checkbox" name="dryRun" value="1" checked> {{ 'Dry run — report what would change without writing anything'|t('freelink') }}</label>
+                        </div>
+                        <button type="submit" class="btn submit">{{ 'Run'|t('freelink') }}</button>
+                    </form>
+                {% endif %}
+
+                <p class="light smalltext">{{ 'Console:'|t('freelink') }} <code>php artisan freelink:migrate:from-craft-link --dry-run</code></p>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="light">{{ 'No link fields to migrate.'|t('freelink') }}</p>
+    {% endif %}
+
+    <p class="light smalltext">{{ '{sources} have no Craft 6 versions. Migrate their fields with FreeLink 5.3 on Craft 5 before upgrading.'|t('freelink', {sources: craft5Only|join(', ')}) }}</p>
+
+    <hr>
+
+    <h2>{{ 'Migration history'|t('freelink') }}</h2>
+
+    {% if history|length %}
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th scope="col">{{ 'Source'|t('freelink') }}</th>
+                    <th scope="col">{{ 'Field'|t('freelink') }}</th>
+                    <th scope="col">{{ 'Status'|t('freelink') }}</th>
+                    <th scope="col">{{ 'Date'|t('freelink') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for migration in history %}
+                    <tr>
+                        <td>{{ labels[migration.sourcePlugin] ?? migration.sourcePlugin }}</td>
+                        <td>{{ fieldNames[migration.fieldId] ?? ('Field #{id}'|t('freelink', {id: migration.fieldId})) }}</td>
+                        <td>
+                            <span class="status {{ migration.status == 'complete' ? 'green' : (migration.status == 'failed' ? 'red' : 'orange') }}"></span>
+                            {{ migration.status }}
+                        </td>
+                        <td>{{ migration.dateUpdated|datetime('short') }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="light">{{ 'No migrations have been run yet.'|t('freelink') }}</p>
+    {% endif %}
+</div>
