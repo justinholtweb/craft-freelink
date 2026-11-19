@@ -146,7 +146,8 @@ class HyperMigrator extends BaseMigrator
                     'classes' => $hyperLink['classes'] ?? null,
                     'id' => $hyperLink['linkId'] ?? null,
                     'rel' => null,
-                    'customAttributes' => $hyperLink['customAttributes'] ?? [],
+                    // Only attributes FreeLink would render (see UrlSafety::isSafeAttributeName()).
+                    'customAttributes' => \justinholtweb\freelink\helpers\UrlSafety::safeCustomAttributes($hyperLink['customAttributes'] ?? []),
                 ];
 
                 // Check if this is an element link

@@ -217,10 +217,15 @@ The field value is a `LinkCollection` that transparently proxies to the first li
 ```
 
 Editors can't make a link run script. A `javascript:`, `vbscript:` or `data:` URL fails
-validation, and one already stored renders with no URL. Custom attribute names must be plain
-names (`data-*`, `aria-*`, `hreflang`…), never an event handler (`on…`) or one that sets a URL
-(`href`, `src`, `formaction`). They can't replace an attribute the link sets itself, such as
-`target` or `rel`. They render only while the field's **Show Advanced** setting is on. Attributes
+validation, and one already stored renders with no URL. Custom attribute names are an
+allowlist (5.3+, the same as FreeNav): `data-*`, `aria-*`, and the plain attributes `title`, `rel`,
+`id`, `lang`, `dir`, `role`, `tabindex`, `accesskey`, `translate`, `hreflang`, `download`, `type`,
+`itemprop`, `itemscope`, `itemtype`, `itemid` and `referrerpolicy`. Event handlers, URL attributes,
+`style`, `class` (use **CSS Classes**) and front-end framework directives that run code are refused —
+Alpine (`x-*`), htmx (`hx-*`, `data-hx-*`), Vue (`v-*`), Angular (`ng-*`, `data-ng-*`) and Datastar's
+`data-on-*`, `data-bind`, `data-text`, `data-show` and the like. Values must be text. If your front end
+runs another framework that executes `data-*` attributes, treat editors as trusted. Attributes can't
+replace one the link sets itself, such as `target` or `rel`. They render only while the field's **Show Advanced** setting is on. Attributes
 passed to `link({…})` in a template are yours and aren't checked.
 
 ### Multi-Link Mode

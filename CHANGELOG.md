@@ -5,6 +5,20 @@
 > {note} The 5.3 migration adds two tables and queues an "Indexing FreeLink links" job that builds the
 > link index from existing content. The Links screen fills in once it has run.
 
+### Security
+- **Custom attribute names are now an allowlist, the same as FreeNav 5.2.1.** Before, any name that
+  wasn't an event handler or a URL attribute was accepted, so an editor could add `style`, `class`,
+  or a front-end framework directive that runs code (`x-init`, `hx-get`, `v-html`, `ng-click`,
+  Datastar's `data-on-click`…), or an array value that Craft expands into further attributes. Now
+  only `data-*` (except attributes frameworks run as code, such as `data-hx-*`, `data-ng-*`,
+  `data-on-*`, `data-bind`, `data-text` and `data-show`), `aria-*` and plain attributes such as
+  `title`, `rel`, `id`, `lang`, `role`, `hreflang` and `itemprop` are allowed, and values must be
+  text. Anything else is refused when a link is saved (CP, GraphQL, MCP), dropped by the Hyper
+  migration, and skipped when a link renders or is returned by MCP — which also covers links saved
+  before this release. An entry holding such an attribute shows a validation error naming it until
+  it's removed. On a site whose front end runs a framework that executes other `data-*` attributes,
+  treat editors as trusted.
+
 ### Added
 - A **FreeLink** section in the control panel, with a sidebar item whose label and icon can be
   changed in the new plugin settings: an icon from Craft's icon picker, or a pasted SVG (checked to

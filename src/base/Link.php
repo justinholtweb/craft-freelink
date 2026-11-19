@@ -113,11 +113,25 @@ class Link extends Model implements JsonSerializable
     public function validateCustomAttributes(string $attribute): void
     {
         foreach ($this->customAttributes as $attr) {
-            $name = $attr['attribute'] ?? '';
+            if (!is_array($attr)) {
+                $this->addError($attribute, Craft::t('freelink', 'Custom attributes must be name/value pairs.'));
+                continue;
+            }
 
-            if ($name !== '' && !UrlSafety::isSafeAttributeName($name)) {
-                $this->addError($attribute, Craft::t('freelink', '“{name}” can’t be used as a custom attribute.', [
+            $name = $attr['attribute'] ?? '';
+            $name = is_string($name) ? trim($name) : $name;
+
+            if ($name === '') {
+                continue;
+            }
+
+            if (!UrlSafety::isSafeAttributeName($name)) {
+                $this->addError($attribute, Craft::t('freelink', '“{name}” can’t be used as a custom attribute. Use data-*, aria-*, title, rel, id, lang, role or another plain attribute; event handlers, URL attributes, style, class and framework directives such as x-* or hx-* aren’t allowed.', [
                     'name' => is_string($name) ? $name : '',
+                ]));
+            } elseif (UrlSafety::customAttributeValue($attr['value'] ?? null) === null) {
+                $this->addError($attribute, Craft::t('freelink', 'The value of “{name}” must be text.', [
+                    'name' => $name,
                 ]));
             }
         }
@@ -155,12 +169,9 @@ class Link extends Model implements JsonSerializable
     {
         $safe = [];
 
-        foreach ($this->customAttributes as $attr) {
-            $name = $attr['attribute'] ?? '';
-
-            if ($name !== '' && UrlSafety::isSafeAttributeName($name)) {
-                $safe[$name] = (string)($attr['value'] ?? '');
-            }
+        // Also covers attributes stored before 5.3, or written without validation.
+        foreach (UrlSafety::safeCustomAttributes($this->customAttributes) as $attr) {
+            $safe[$attr['attribute']] = $attr['value'];
         }
 
         return $safe;

@@ -991,6 +991,36 @@ check('mutation: an unsafe URL is refused', function() use ($gql, $full, $mutati
     return !empty($r['errors']) ?: json_encode($r);
 });
 
+check('mutation: a custom attribute outside the allowlist is refused; an allowed one saves', function() use ($full, $mutationName, &$created) {
+    $bad = gqlRun($full, "mutation { $mutationName(title: \"FL53 attr bad\", freelinkItTest: [{type: \"url\", value: \"https://attr.test/\", customAttributes: [{attribute: \"data-on-click\", value: \"x\"}]}]) { id } }");
+    $good = gqlRun($full, "mutation { $mutationName(title: \"FL53 attr ok\", freelinkItTest: [{type: \"url\", value: \"https://attr.test/\", customAttributes: [{attribute: \"data-track\", value: \"cta\"}]}]) { id } }");
+    foreach ([$bad, $good] as $r) {
+        if (isset($r['data'][$mutationName]['id'])) {
+            $created[] = (int)$r['data'][$mutationName]['id'];
+        }
+    }
+    return !empty($bad['errors']) && str_contains(json_encode($bad['errors']), 'data-on-click') && isset($good['data'][$mutationName]['id'])
+        ?: json_encode([$bad, $good]);
+});
+
+check('MCP output and rendering skip stored attributes outside the allowlist', function() {
+    if (!class_exists(craft\mcp\McpOutputContext::class)) {
+        return true;
+    }
+    $holder = makeEntry('FL53 stored attrs', [], [['type' => 'url', 'value' => 'https://attr.test/', 'customAttributes' => [['attribute' => 'data-track', 'value' => 'ok']]]]);
+    // A value as an older release or a migration could have stored it: an unsafe attribute included.
+    $fresh = Entry::find()->id($holder->id)->status(null)->one();
+    $field = $fresh->getFieldLayout()->getFieldByHandle('freelinkItTest');
+    $link = $fresh->getFieldValue('freelinkItTest')->first();
+    $link->customAttributes[] = ['attribute' => 'x-init', 'value' => 'alert(1)'];
+    $stored = $link->customAttributes;
+    $mcp = $field->getMcpValue(new LinkCollection([$link]), $fresh, new craft\mcp\McpOutputContext());
+    $html = (string)$link->getLink();
+    return count($stored) === 2 && json_encode($mcp[0]['customAttributes']) === '[{"attribute":"data-track","value":"ok"}]'
+        && str_contains($html, 'data-track="ok"') && !str_contains($html, 'x-init')
+        ?: json_encode([$stored, $mcp[0]['customAttributes'] ?? null, $html]);
+});
+
 check('mutation: a target outside the schema’s scope is refused', function() use ($gql, $full, $mutationName) {
     $other = Entry::find()->section('news')->status(null)->one() ?? Entry::find()->section('post')->status(null)->one();
     if (!$other) {
