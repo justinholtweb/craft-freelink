@@ -152,10 +152,13 @@ class SsrfGuard
     {
         if ($isIpLiteral) {
             // Request the canonical address, so the client can't read the host differently.
-            $hostPart = str_contains($ip, ':') ? '['.$ip.']' : $ip;
-            $url = self::replaceHost($url, $hostPart);
-            $host = $hostPart;
+            $host = str_contains($ip, ':') ? '['.$ip.']' : $ip;
         }
+
+        // Always request the normalised host (lower case, no trailing dot, IDN as ASCII, no
+        // percent-encoding): the connection is pinned for exactly this name, and a URL whose host
+        // curl reads differently (`Example.COM.`) would miss the pin and be resolved again.
+        $url = self::replaceHost($url, $host);
 
         // Fragments are never sent.
         $url = preg_replace('/#.*$/s', '', $url) ?? $url;

@@ -78,10 +78,13 @@ r = mcp('admin', [
     ('elements_get', {'type': 'entry', 'id': ids['source'], 'fields': ['fl6Links', 'fl6Cta']}),
 ])
 b = body(r[0])
-check('freelink_find_links_to', b.get('total') == 1 and b['links'][0]['ownerId'] == ids['source'] and b['links'][0]['field'] == 'fl6Links' and b['target']['id'] == ids['live'], b)
+mine = [l for l in b.get('links', []) if l['ownerId'] == ids['source']]
+check('freelink_find_links_to', b.get('total', 0) >= 1 and b['total'] == b['count'] and len(mine) == 1 and mine[0]['field'] == 'fl6Links' and b['target']['id'] == ids['live'], b)
+admin_total = b.get('total')
 check('freelink_find_links_to limit/nextOffset', body(r[1]).get('count', 0) >= 1, body(r[1]))
 b = body(r[2])
-check('freelink_list_links by field and type', b.get('total') == 3 and all(l['type'] == 'entry' for l in b['links']) and {l['status'] for l in b['links']} == {'live', 'disabled', 'pending'}, b)
+mine = [l for l in b.get('links', []) if l['ownerId'] == ids['source']]
+check('freelink_list_links by field and type', len(mine) == 3 and all(l['type'] == 'entry' for l in b['links']) and {l['status'] for l in mine} == {'live', 'disabled', 'pending'}, b)
 check('freelink_list_links by owner type', body(r[3]).get('total', 0) >= 4, body(r[3]))
 check('freelink_list_links invalid domain is a tool error', is_error(r[4]), r[4])
 b = body(r[5])
@@ -122,10 +125,13 @@ r = mcp('fl6editor', [
     ('elements_update', {'type': 'entry', 'id': ids['source'], 'fields': {'fl6Links': [{'type': 'entry', 'targetId': ids['secret']}]}}),
     ('freelink_migration_status', {}),
     ('freelink_list_links', {'field': 'fl6Links'}),
+    ('freelink_find_links_to', {'targetId': ids['live']}),
 ])
 check('editor: find_links_to an unviewable target = "Element not found."', is_error(r[0]) and 'not found' in json.dumps(r[0]), r[0])
 check('editor: elements_update to an unviewable target refused', is_error(r[1]), r[1])
 check('editor: migration tools are admin only', is_error(r[2]), r[2])
 check('editor: list_links works', body(r[3]).get('total', 0) >= 1, body(r[3]))
+b = body(r[4])
+check('editor: totals leave out sources they can’t view', b.get('total') == b.get('count') and all(l['ownerTitle'] != 'FL6 Secret Source' for l in b.get('links', [])), b)
 
 print(f'{passed} passed, {failed} failed')

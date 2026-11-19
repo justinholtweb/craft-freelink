@@ -82,14 +82,16 @@ class CurlTransport implements HttpTransport
         curl_setopt_array($ch, $options);
         $ok = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $primaryIp = curl_getinfo($ch, CURLINFO_PRIMARY_IP);
+        $primaryIp = $primaryIp !== '' ? $primaryIp : null;
         $errno = curl_errno($ch);
         $error = $errno ? curl_error($ch) : null;
 
         // A write abort after the headers arrived is our byte cap, not a failure.
         if ($code > 0 && ($ok !== false || $errno === CURLE_WRITE_ERROR)) {
-            return new HttpResponse($code, $location);
+            return new HttpResponse($code, $location, null, $primaryIp);
         }
 
-        return new HttpResponse($code, $location, $error ?: 'Request failed');
+        return new HttpResponse($code, $location, $error ?: 'Request failed', $primaryIp);
     }
 }

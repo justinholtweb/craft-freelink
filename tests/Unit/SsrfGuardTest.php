@@ -182,4 +182,17 @@ class SsrfGuardTest extends TestCase
         $this->expectException(BlockedUrlException::class);
         $this->guard([80, 443], ['intranet.test'])->check('http://127.0.0.1/');
     }
+
+    public function test_request_url_uses_the_normalised_host(): void
+    {
+        $guard = new SsrfGuard([80, 443], [], fn ($h) => $h === 'example.com' ? ['93.184.215.14'] : []);
+
+        $t = $guard->check('https://ExAmple.COM./path?q=1#frag');
+        self::assertSame('https://example.com/path?q=1', $t['url']);
+        self::assertSame('example.com', $t['host']);
+
+        $t = $guard->check('https://ex%61mple.com:443/');
+        self::assertSame('https://example.com:443/', $t['url'], 'percent-encoded host decoded');
+        self::assertSame('example.com', $t['host']);
+    }
 }

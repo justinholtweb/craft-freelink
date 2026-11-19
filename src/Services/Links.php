@@ -21,6 +21,9 @@ use JustinHoltWeb\FreeLink\Links\Url;
 use JustinHoltWeb\FreeLink\Links\User;
 use JustinHoltWeb\FreeLink\Links\Variant;
 use JustinHoltWeb\FreeLink\Models\LinkReference;
+use Throwable;
+
+use function CraftCms\Cms\currentUser;
 
 /**
  * Link type registry and the public reverse-lookup API.
@@ -165,6 +168,15 @@ class Links
             'siteId' => $options['siteId'] ?? $options['site'] ?? null,
             'status' => $options['status'] ?? 'all',
         ];
+
+        // In the control panel, only what the signed-in user may view. Front-end templates are the
+        // site's own code and see every link.
+        try {
+            if (request()->isCpRequest() && ($user = currentUser())) {
+                $criteria['viewer'] = $user;
+            }
+        } catch (Throwable) {
+        }
 
         $result = app(LinkIndex::class)->find(
             $criteria,

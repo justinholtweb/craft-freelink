@@ -7,12 +7,18 @@ namespace JustinHoltWeb\FreeLink\Services;
 use CraftCms\Cms\Database\Table;
 use CraftCms\Cms\Element\Contracts\ElementInterface;
 use CraftCms\Cms\Element\ElementHelper;
+use CraftCms\Cms\Section\Enums\SectionType;
 use CraftCms\Cms\Support\Facades\Fields;
+use CraftCms\Cms\Support\Facades\Sections;
+use CraftCms\Cms\Support\Facades\Volumes;
 use CraftCms\Cms\Support\Query;
+use CraftCms\Cms\User\Contracts\CraftUser;
+use CraftCms\Cms\User\Elements\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use JustinHoltWeb\FreeLink\Base\ElementLink;
 use JustinHoltWeb\FreeLink\Database\Tables;
@@ -340,7 +346,8 @@ class LinkIndex
      * Criteria (all optional): targetId, targetSiteId, fieldId, field (handle), type, siteId,
      * sourceType (element class of the root source), ownerType (element class of the owner),
      * sectionId (entry section of the root source), domain, status (`all`, `problems`, `ok`,
-     * `unchecked`, or a single status), sourceId.
+     * `unchecked`, or a single status), sourceId, viewer (a user: only links whose root source
+     * that user may view — see applyViewer()).
      *
      * @param  array<string, mixed>  $criteria
      */
@@ -415,6 +422,10 @@ class LinkIndex
                 ->where('re.sectionId', (int) $criteria['sectionId']);
         }
 
+        if (($criteria['viewer'] ?? null) instanceof CraftUser) {
+            $this->applyViewer($query, $criteria['viewer']);
+        }
+
         $domain = self::normalizeDomain($criteria['domain'] ?? null);
         if ($domain !== null) {
             $query->where(fn (Builder $q) => $q->where('i.host', $domain)->orWhere('i.host', 'like', '%.'.$domain));
@@ -456,6 +467,85 @@ class LinkIndex
     }
 
     /**
+     * Limits a query to links whose root source the user may view, in SQL, so totals and pages
+     * only count what the user is shown (the Links screen, Linked from, MCP tools).
+     *
+     * Mirrors Craft 6's view policies for the element types that hold FreeLink fields: entries
+     * (`viewEntries:<section>`, plus `viewPeerEntries:<section>` for other authors' entries outside
+     * singles), assets (`viewAssets:<volume>` for your own uploads, `viewPeerAssets:<volume>` for
+     * others') and users (yourself, or `viewUsers`). Any other root element type is left out for
+     * non-admins (fail closed). Nested entries are judged by their root, as Craft does.
+     */
+    public function applyViewer(Builder $query, CraftUser $user): void
+    {
+        if ($user->isAdmin()) {
+            return;
+        }
+
+        $gate = Gate::forUser($user);
+        $userId = (int) $user->getCraftUserId();
+        $full = [];
+        $ownOnly = [];
+
+        foreach (Sections::getAllSections() as $section) {
+            if (! $gate->allows("viewEntries:$section->uid")) {
+                continue;
+            }
+
+            if ($section->type === SectionType::Single || $gate->allows("viewPeerEntries:$section->uid")) {
+                $full[] = (int) $section->id;
+            } else {
+                $ownOnly[] = (int) $section->id;
+            }
+        }
+
+        $ownVolumes = [];
+        $peerVolumes = [];
+
+        foreach (Volumes::getAllVolumes() as $volume) {
+            if ($gate->allows("viewAssets:$volume->uid")) {
+                $ownVolumes[] = (int) $volume->id;
+            }
+            if ($gate->allows("viewPeerAssets:$volume->uid")) {
+                $peerVolumes[] = (int) $volume->id;
+            }
+        }
+
+        $canViewUsers = $gate->allows('viewUsers');
+
+        $query
+            ->leftJoin(Table::ENTRIES.' as vre', 'vre.id', '=', 'i.rootOwnerId')
+            ->leftJoin(Table::ASSETS.' as vra', 'vra.id', '=', 'i.rootOwnerId')
+            ->where(function (Builder $q) use ($full, $ownOnly, $ownVolumes, $peerVolumes, $canViewUsers, $userId): void {
+                $q->whereRaw('0 = 1');
+
+                if ($full !== []) {
+                    $q->orWhereIn('vre.sectionId', $full);
+                }
+
+                if ($ownOnly !== []) {
+                    $q->orWhere(fn (Builder $q) => $q->whereIn('vre.sectionId', $ownOnly)->whereExists(
+                        fn (Builder $e) => $e->from(Table::ENTRIES_AUTHORS.' as vea')
+                            ->whereColumn('vea.entryId', 'i.rootOwnerId')
+                            ->where('vea.authorId', $userId),
+                    ));
+                }
+
+                if ($ownVolumes !== []) {
+                    $q->orWhere(fn (Builder $q) => $q->whereIn('vra.volumeId', $ownVolumes)->where('vra.uploaderId', $userId));
+                }
+
+                if ($peerVolumes !== []) {
+                    $q->orWhere(fn (Builder $q) => $q->whereIn('vra.volumeId', $peerVolumes)
+                        ->where(fn (Builder $q) => $q->whereNull('vra.uploaderId')->orWhere('vra.uploaderId', '<>', $userId)));
+                }
+
+                $q->orWhere(fn (Builder $q) => $q->where('r.type', User::class)
+                    ->where(fn (Builder $q) => $canViewUsers ? $q->whereRaw('1 = 1') : $q->where('r.id', $userId)));
+            });
+    }
+
+    /**
      * Runs a filtered query: one page of references plus the total.
      *
      * @param  array<string, mixed>  $criteria
@@ -488,9 +578,9 @@ class LinkIndex
     /**
      * Number of live links pointing at an element.
      */
-    public function countTo(int $targetId): int
+    public function countTo(int $targetId, ?CraftUser $viewer = null): int
     {
-        return $this->createQuery(['targetId' => $targetId])->count('i.id');
+        return $this->createQuery(['targetId' => $targetId, 'viewer' => $viewer])->count('i.id');
     }
 
     /**

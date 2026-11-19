@@ -43,6 +43,12 @@ reverse lookups, GraphQL and MCP — with the same names, settings and permissio
   when already stored, skipped when a link renders and left out of MCP output. Attribute values
   must be text. If your front end runs some other framework that executes `data-*` attributes,
   treat everyone who can edit FreeLink fields as trusted.
+- The Links and Broken Links screens, **Linked from**, `linksTo()` in the control panel and the MCP
+  tools leave out links whose source the user can't view in the query itself, so totals and pages
+  only count what the user is shown and nothing of those links (URL, label, check result) appears.
+- The link checker requests each URL with its normalised host (lower case, no trailing dot), so the
+  pinned address always applies, and refuses any response that didn't come from the address it
+  checked (curl's primary IP), on every redirect hop.
 
 ### Removed
 - Category links can't be created: Craft 6 has no categories. The upgrade turns category links whose

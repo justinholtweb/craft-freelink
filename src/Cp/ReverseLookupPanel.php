@@ -44,13 +44,14 @@ final class ReverseLookupPanel
         }
 
         $index = app(LinkIndex::class);
-        $total = $index->countTo((int) $targetId);
+        // Only links from sources the user may view are counted or listed.
+        $total = $index->countTo((int) $targetId, $user);
 
         if ($total === 0) {
             return null;
         }
 
-        $result = $index->find(['targetId' => $targetId], self::LIMIT);
+        $result = $index->find(['targetId' => $targetId, 'viewer' => $user], self::LIMIT);
         $chips = app(ElementHtml::class);
         $items = '';
         $hidden = 0;

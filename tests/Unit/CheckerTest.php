@@ -31,8 +31,10 @@ class CheckerTest extends TestCase
             {
                 $this->test->requests[] = [$method, $url, $host, $ip, $pin];
                 $r = $this->script[$url] ?? new HttpResponse(0, null, 'no route');
+                $r = is_array($r) ? ($r[$method] ?? new HttpResponse(0, null, 'no route')) : $r;
 
-                return is_array($r) ? ($r[$method] ?? new HttpResponse(0, null, 'no route')) : $r;
+                // A scripted response came from the pinned address unless it says otherwise.
+                return $r->code > 0 && $r->primaryIp === null ? new HttpResponse($r->code, $r->location, $r->error, $ip) : $r;
             }
         };
 
@@ -175,5 +177,58 @@ class CheckerTest extends TestCase
         $result = $checker->run();
         self::assertTrue($result['skipped']);
         self::assertSame([], $this->requests);
+    }
+
+    public function test_mixed_case_and_trailing_dot_host_is_requested_normalised(): void
+    {
+        $result = $this->checker(['http://site.test/A' => new HttpResponse(200)])->checkUrl('http://SiTe.TEST./A');
+
+        self::assertSame('ok', $result['status']);
+        // The URL curl is given carries exactly the host the connection is pinned for.
+        self::assertSame(['HEAD', 'http://site.test/A', 'site.test', '93.184.215.14', true], $this->requests[0]);
+    }
+
+    public function test_answer_from_another_address_is_refused(): void
+    {
+        $result = $this->checker(['http://site.test/' => new HttpResponse(200, null, null, '10.0.0.5')])->checkUrl('http://site.test/');
+
+        self::assertSame('blocked', $result['status']);
+        self::assertStringContainsString('not the checked address', (string) $result['error']);
+        self::assertCount(1, $this->requests, 'nothing more is requested');
+    }
+
+    public function test_redirect_hop_answered_by_another_address_is_refused(): void
+    {
+        $result = $this->checker([
+            'http://site.test/' => new HttpResponse(301, 'http://other.test/next'),
+            'http://other.test/next' => new HttpResponse(200, null, null, '93.184.215.14'),
+        ])->checkUrl('http://site.test/');
+
+        self::assertSame('blocked', $result['status']);
+        self::assertSame(1, $result['redirects']);
+    }
+
+    public function test_ipv6_addresses_compare_canonically(): void
+    {
+        $checker = $this->checker(['http://[2606:2800:220:1:248:1893:25c8:1946]/' => new HttpResponse(200, null, null, '2606:2800:0220:0001:0248:1893:25c8:1946')]);
+
+        self::assertSame('ok', $checker->checkUrl('http://[2606:2800:220:1:248:1893:25c8:1946]/')['status']);
+    }
+
+    public function test_answer_with_unknown_address_is_refused(): void
+    {
+        $transport = new class implements HttpTransport
+        {
+            public function request(string $method, string $url, string $host, int $port, string $ip, bool $pin): HttpResponse
+            {
+                return new HttpResponse(200);
+            }
+        };
+        $checker = new Checker;
+        $checker->transport = $transport;
+        $checker->guard = new SsrfGuard([80, 443], [], fn ($h) => ['93.184.215.14']);
+        $checker->hostDelayMs = 0;
+
+        self::assertSame('blocked', $checker->checkUrl('http://site.test/')['status']);
     }
 }

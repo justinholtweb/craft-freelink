@@ -18,6 +18,7 @@ use CraftCms\Cms\User\Models\User as UserModel;
 use CraftCms\Cms\View\TemplateMode;
 use Illuminate\Support\Facades\DB;
 use JustinHoltWeb\FreeLink\Base\ElementLink;
+use JustinHoltWeb\FreeLink\Cp\ReverseLookupPanel;
 use JustinHoltWeb\FreeLink\Fields\FreeLinkField;
 use JustinHoltWeb\FreeLink\Fields\LinkControl;
 use JustinHoltWeb\FreeLink\Links\Email;
@@ -250,5 +251,29 @@ $fromDraft = Entry::find()->id($adminDraft->id)->drafts()->status(null)->one();
 $check('draft is not a grandfathering baseline', ! isset($cta->storedLinks($fromDraft)[FreeLinkField::linkKey(app(Links::class)->createLink(['type' => 'entry', 'targetId' => $secret->id]))]) && $multi->linkErrors($fromDraft) !== [], $multi->linkErrors($fromDraft));
 $as($adminId);
 Elements::deleteElement($adminDraft, true);
+
+// ---- Sources the user can't view are left out in the query (honest totals) -----------------------
+$as($adminId);
+$secretSource = $get('fl6-secret-source', 'fl6Secret') ?? new Entry(['sectionId' => $secret->sectionId, 'typeId' => $secret->typeId]);
+$secretSource->title = 'FL6 Secret Source';
+$secretSource->slug = 'fl6-secret-source';
+$secretSource->setFieldValues(['fl6Cta' => ['type' => 'url', 'value' => 'https://secret-only.example.com/', 'label' => 'SECRET-LABEL'], 'fl6Links' => [['type' => 'entry', 'targetId' => $live->id]]]);
+Elements::saveElement($secretSource);
+$save($fresh($source), ['fl6Cta' => null, 'fl6Links' => [['type' => 'entry', 'targetId' => $live->id]]]);
+$index = app(LinkIndex::class);
+$adminUser = UserModel::query()->find($adminId);
+$editorUser = UserModel::query()->find($editorId);
+$check('admin sees both links to the target', $index->countTo($live->id, $adminUser) === 2 && $index->find(['targetId' => $live->id, 'viewer' => $adminUser])['total'] === 2);
+$check('editor: count excludes the unviewable source', $index->countTo($live->id, $editorUser) === 1, $index->countTo($live->id, $editorUser));
+$found = $index->find(['targetId' => $live->id, 'viewer' => $editorUser]);
+$check('editor: total and rows exclude it', $found['total'] === 1 && count($found['references']) === 1 && $found['references'][0]->sourceId === $source->id, $found['total']);
+$check('editor: the secret source’s URL/label never appear', $index->find(['domain' => 'secret-only.example.com', 'viewer' => $editorUser])['total'] === 0 && $index->find(['domain' => 'secret-only.example.com', 'viewer' => $adminUser])['total'] === 1);
+$as($editorId);
+request()->headers->set('X-Test', '1');
+$panel = (string) ReverseLookupPanel::html($live);
+$check('editor: Linked from counts only viewable sources', str_contains($panel, 'View all 1 link') && ! str_contains($panel, 'FL6 Secret Source') && ! str_contains($panel, 'can’t view'), $panel);
+$as($adminId);
+$panel = (string) ReverseLookupPanel::html($live);
+$check('admin: Linked from counts both', str_contains($panel, 'View all 2 links'), $panel);
 
 echo sprintf('%d passed, %d failed', $GLOBALS['fl6']['pass'], $GLOBALS['fl6']['fail']).PHP_EOL;

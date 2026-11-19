@@ -10,6 +10,7 @@ use GuzzleHttp\Psr7\UriResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use JustinHoltWeb\FreeLink\Checks\CurlTransport;
+use JustinHoltWeb\FreeLink\Checks\HttpResponse;
 use JustinHoltWeb\FreeLink\Checks\HttpTransport;
 use JustinHoltWeb\FreeLink\Database\Tables;
 use JustinHoltWeb\FreeLink\Helpers\BlockedUrlException;
@@ -91,9 +92,17 @@ class Checker
             $pin = ! $target['isIpLiteral'];
             $response = $transport->request('HEAD', $target['url'], $target['host'], $target['port'], $target['ip'], $pin);
 
+            if ($mismatch = $this->addressMismatch($response, $target['ip'])) {
+                return $this->result('blocked', null, $redirects ? $current : null, $redirects, $mismatch);
+            }
+
             // Some servers refuse or mishandle HEAD: one GET, with the byte cap.
             if ($response->error !== null || in_array($response->code, [400, 403, 405, 501], true)) {
                 $response = $transport->request('GET', $target['url'], $target['host'], $target['port'], $target['ip'], $pin);
+
+                if ($mismatch = $this->addressMismatch($response, $target['ip'])) {
+                    return $this->result('blocked', null, $redirects ? $current : null, $redirects, $mismatch);
+                }
             }
 
             if ($response->error !== null && $response->code === 0) {
@@ -209,6 +218,33 @@ class Checker
         return DB::table(Tables::CHECKS)
             ->whereNotIn('urlHash', DB::table(Tables::INDEX)->select('urlHash')->whereNotNull('urlHash'))
             ->delete();
+    }
+
+    /**
+     * Why a response can't be trusted to have come from the approved address, or null when it did.
+     *
+     * The connection is pinned to the address the guard checked; this confirms it after the fact,
+     * for every hop. A response from anywhere else (the pin missed, a proxy, a resolver quirk) is
+     * refused, and so is a response whose address the transport can't report.
+     */
+    private function addressMismatch(HttpResponse $response, string $approvedIp): ?string
+    {
+        if ($response->code === 0) {
+            return null; // Nothing was received; the error path handles it.
+        }
+
+        if ($response->primaryIp === null) {
+            return 'Couldn’t confirm the address that answered';
+        }
+
+        $actual = @inet_pton(trim($response->primaryIp, '[]'));
+        $approved = @inet_pton(trim($approvedIp, '[]'));
+
+        if ($actual === false || $approved === false || $actual !== $approved) {
+            return sprintf('Connected to %s, not the checked address %s', $response->primaryIp, $approvedIp);
+        }
+
+        return null;
     }
 
     /**

@@ -107,6 +107,8 @@ class LinksController
             'domain' => $filters['domain'],
             'targetId' => $filters['target'],
             'status' => $filters['status'],
+            // Rows whose source the user can't view aren't listed or counted at all.
+            'viewer' => currentUser(),
         ], self::PAGE_SIZE, ($page - 1) * self::PAGE_SIZE);
 
         $total = $result['total'];

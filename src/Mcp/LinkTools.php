@@ -82,6 +82,7 @@ class LinkTools
             'targetSiteId' => $targetSiteId,
             'field' => $field,
             'siteId' => $ownerSiteId,
+            'viewer' => $user,
         ], $limit, $offset);
 
         $links = [];
@@ -154,6 +155,7 @@ class LinkTools
             'type' => $linkType,
             'domain' => $domain,
             'siteId' => $siteId,
+            'viewer' => $user,
         ];
 
         if ($ownerType !== null && $ownerType !== '') {
@@ -237,6 +239,7 @@ class LinkTools
             'field' => $field,
             'siteId' => $siteId,
             'sourceId' => $ownerId,
+            'viewer' => $user,
         ])
             ->orderBy('i.id')
             ->offset($offset)

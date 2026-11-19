@@ -13,5 +13,7 @@ class HttpResponse
         public readonly int $code = 0,
         public readonly ?string $location = null,
         public readonly ?string $error = null,
+        /** The address the request actually connected to (curl's primary IP), when known. */
+        public readonly ?string $primaryIp = null,
     ) {}
 }
