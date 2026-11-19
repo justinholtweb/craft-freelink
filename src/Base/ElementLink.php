@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JustinHoltWeb\FreeLink\Base;
 
 use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\Support\Facades\Sites;
 use Illuminate\Support\Facades\Gate;
 use JustinHoltWeb\FreeLink\Gql\GqlScope;
 use Override;
@@ -88,8 +89,8 @@ class ElementLink extends Link
                         ->id($this->targetId)
                         ->status(null);
 
-                    if ($this->targetSiteId) {
-                        $query->siteId($this->targetSiteId);
+                    if ($siteId = $this->resolvedSiteId()) {
+                        $query->siteId($siteId);
                     }
 
                     $this->element = $query->one();
@@ -116,6 +117,27 @@ class ElementLink extends Link
     }
 
     /**
+     * The site the target is resolved on — and so the site every visibility and schema check uses:
+     * the link's target site, else the site of the element holding the link, else the current site.
+     */
+    public function resolvedSiteId(): ?int
+    {
+        if ($this->targetSiteId) {
+            return $this->targetSiteId;
+        }
+
+        if ($this->ownerSiteId) {
+            return $this->ownerSiteId;
+        }
+
+        try {
+            return (int) Sites::getCurrentSite()->id;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * Whether whoever is asking may see the target: in a GraphQL request, the active schema must be
      * able to query it; with a signed-in user (CP, MCP), the user must be able to view it. Front-end
      * templates (no user, no schema) see it, as they always have.
@@ -131,7 +153,7 @@ class ElementLink extends Link
 
         try {
             if (GqlScope::isActive()) {
-                return GqlScope::canQuery($this->targetId, $this->targetSiteId ?? $this->ownerSiteId);
+                return GqlScope::canQuery($this->targetId, $this->resolvedSiteId());
             }
 
             $user = currentUser();

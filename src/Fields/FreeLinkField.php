@@ -1042,10 +1042,12 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
             return true;
         }
 
-        // The schema must be able to read the target on the site the link points at.
-        $siteId = $link->targetSiteId ?? ($owner?->siteId ? (int) $owner->siteId : $link->ownerSiteId);
+        if ($owner?->siteId && ! $link->ownerSiteId) {
+            $link->ownerSiteId = (int) $owner->siteId;
+        }
 
-        if (GqlScope::isActive() && ! GqlScope::canQuery($link->targetId, $siteId)) {
+        // The schema must be able to read the target on the site the link resolves it on.
+        if (GqlScope::isActive() && ! GqlScope::canQuery($link->targetId, $link->resolvedSiteId())) {
             return false;
         }
 
@@ -1059,13 +1061,8 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
             return true;
         }
 
+        // The target as the link resolves it (same site as every other check); none there, no link.
         $target = $link->getElement();
-
-        if (! $target) {
-            /** @var class-string<ElementInterface> $elementType */
-            $elementType = $link::elementType();
-            $target = $elementType::find()->id($link->targetId)->site('*')->unique()->status(null)->one();
-        }
 
         return $target !== null && Gate::forUser($user)->allows('view', $target);
     }
