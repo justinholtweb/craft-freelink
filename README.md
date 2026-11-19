@@ -1,25 +1,31 @@
-# FreeLink for Craft CMS 5
+# FreeLink for Craft CMS 6
 
-A powerful, lightweight link field plugin for Craft CMS 5. Hybrid storage with proper element relations, 12 built-in link types, and migration paths from Hyper, Linkit, Typed Link Field, and native Craft Link fields.
+A powerful, lightweight link field plugin for Craft CMS 6. Hybrid storage with proper element relations, a link index with broken-link checks, reverse lookups, GraphQL and MCP support, and a migration path from Craft's own Link field.
+
+> **Beta.** FreeLink 6.0.0-beta.1 is a native Craft 6 plugin (Laravel, no Yii 2 adapter) for
+> Craft 6, which is itself in beta. Test it on a copy of your site first.
+>
+> **Using Craft 5?** Install FreeLink 5.x: `composer require justinholtweb/craft-freelink:^5.3`.
+> Upgrading a Craft 5 site? Read [UPGRADING.md](UPGRADING.md).
 
 ## Why FreeLink?
 
 FreeLink takes a different approach to link fields:
 
 - **Hybrid storage** — Simple links (URL, email, phone) are stored as JSON in the content column. Element links (entries, assets, etc.) get proper rows in a relations table with foreign keys. This gives you referential integrity and reverse lookups without a separate cache table.
-- **Lightweight models** — Links extend `yii\base\Model`, not Craft's `Element` class. Less overhead, simpler API.
-- **Native CP UI** — Field UI uses Craft's Garnish library and vanilla JS. No Vue.js, no Alpine.js.
+- **Lightweight models** — Links are plain Craft components, not elements. Less overhead, simpler API.
+- **Native CP UI** — The field is built from Craft 6's own controls: a table of Craft's link editors, with an icon picker and a custom-attributes column when the field uses them. No custom JavaScript.
 
 ## Requirements
 
-- Craft CMS 5.0.0+ (the MCP features need Craft 5.12.1+; everything else works on any Craft 5)
-- PHP 8.2+
+- Craft CMS 6.0.0-beta.1+
+- PHP 8.5+
 
 ## Installation
 
 ```bash
-composer require justinholtweb/craft-freelink
-php craft plugin/install freelink
+composer require "justinholtweb/craft-freelink:^6.0@beta"
+php artisan craft:plugin:install freelink
 ```
 
 ## Configuration
@@ -44,10 +50,15 @@ Add a FreeLink field in **Settings > Fields**. The settings UI lets you:
 | Site | `site` | Relative path resolved against a site's base URL |
 | Entry | `entry` | Craft entry element |
 | Asset | `asset` | Craft asset element |
-| Category | `category` | Craft category element |
 | User | `user` | Craft user element |
-| Product | `product` | Commerce product (requires Commerce) |
-| Variant | `variant` | Commerce variant (requires Commerce) |
+| Category | `category` | Craft 5 categories only. Craft 6 has none, so the type is never offered; FreeLink's upgrade turns category links into entry links (see UPGRADING.md) |
+| Product | `product` | Commerce product — offered once Commerce 6 is released |
+| Variant | `variant` | Commerce variant — offered once Commerce 6 is released |
+
+In the control panel each link is a row of Craft's own link editor, so element links use Craft's
+element picker. On a multi-site install, **Site** links appear once per site (“Site: English”…).
+Email links take a subject as `you@example.com?subject=Hello`. Custom attributes, when the field
+shows advanced settings, are one `name=value` per line.
 
 ### Selection conditions
 
@@ -105,7 +116,7 @@ where it points and its status. **Broken Links** shows only the links with a pro
 The screen reads a link index FreeLink keeps alongside your content (`freelink_index`), so it stays
 fast on large sites. It covers live content: drafts and revisions are left out. After updating to
 5.3 the index is built by an "Indexing FreeLink links" queue job; admins can rebuild it any time
-with **Rebuild index** or `php craft freelink/links/reindex`.
+with **Rebuild index** or `php artisan freelink:links:reindex`.
 
 ### Link checks
 
@@ -115,14 +126,15 @@ with **Rebuild index** or `php craft freelink/links/reindex`.
   only from a queue job — **Check links now** — or the console:
 
   ```bash
-  php craft freelink/links/check            # URLs not checked in the last 24 hours
-  php craft freelink/links/check --force    # all of them
-  php craft freelink/links/status           # counts
+  php artisan freelink:links:check            # URLs not checked in the last 24 hours
+  php artisan freelink:links:check --force    # all of them
+  php artisan freelink:links:status           # counts
   ```
 
   A run requests each distinct URL once (HEAD, then GET when a server refuses HEAD), one at a time,
   with a pause between requests to the same host, and records the status, HTTP code, final URL and
-  time. Schedule it with cron if you want regular checks.
+  time. Schedule it (Laravel's scheduler or cron) if you want regular checks. The `php craft
+freelink/links/check` style names from FreeLink 5 still work.
 
 The checker is built to never become a way into your network. It requests only http and https URLs
 saved in FreeLink fields — nothing a visitor, an editor's request, GraphQL or MCP supplies. Before
@@ -132,10 +144,10 @@ addresses (`169.254.169.254`, `fd00:ec2::254`…), in IPv4 and IPv6, including I
 the decimal, octal and hex ways of writing an IPv4 address. It connects to the address it checked
 (so DNS can't be switched between the check and the request), ignores proxy settings, sends no
 cookies, gives up after 5 seconds and reads at most 64 KB. Its user agent is
-`FreeLinkChecker/5.3 (+Craft CMS link checker)`.
+`FreeLinkChecker/6.0 (+Craft CMS link checker)`.
 
-To check intranet links, list their hosts — and any extra ports — in `config/freelink.php`. These
-can't be set from the control panel:
+To check intranet links, list their hosts — and any extra ports — in `config/craft/freelink.php`.
+These can't be set from the control panel (a settings save neither stores nor applies them):
 
 ```php
 <?php
@@ -151,13 +163,14 @@ return [
 
 - **Sidebar label** and **Sidebar icon** — rename the sidebar item and pick an icon from Craft's icon
   set, or paste your own SVG. Pasted SVG must be a single `<svg>` element and is sanitised before it
-  is shown (scripts, event handlers and external references are removed). Craft 5 has no built-in
-  sidebar editor; if you use a plugin that customises the sidebar, its settings win.
+  is shown (scripts, event handlers and external references are removed). Craft 6's own
+  **Settings → Control Panel Navigation** can rename and re-icon any item too, and its overrides
+  win over these.
 - **Show "Linked from" on edit screens**.
 - **Check URL links over HTTP** (turn it off and FreeLink never requests a URL), **Recheck after**
   (hours), **Delay between requests to one host** (ms) and **URLs per check run**.
 
-All of these can also be set in `config/freelink.php`.
+All of these can also be set in `config/craft/freelink.php`.
 
 ### Permissions
 
@@ -172,10 +185,10 @@ view are listed without the source's name.
 
 ### Migrations
 
-**FreeLink → Migrations** lists the link fields from Hyper, Linkit, Typed Link Field and Craft's Link
-field that can be converted, runs a migration (a dry run by default, with an optional database
-backup first) and shows the history. Running one for real needs admin changes to be allowed and
-asks for your password again. The console commands below do the same thing. The page used to be at
+**FreeLink → Migrations** lists Craft Link fields that can be converted, runs a migration (a dry
+run by default) and shows the history. Running one for real needs admin changes to be allowed and
+a recently confirmed password. Hyper, Linkit and Typed Link Field have no Craft 6 versions:
+migrate those fields with FreeLink 5.3 before upgrading Craft. The console commands below do the same thing. The page used to be at
 `admin/freelink/migrate`, which now redirects.
 
 ## Twig Usage
@@ -292,7 +305,8 @@ $refs = FreeLink::getInstance()->links->findLinksTo($entry, ['field' => 'myLink'
 {% set linkedFrom = craft.freelink.getRelatedElements(entry, 'myLink') %}
 ```
 
-`craft.freelink` exists from 5.3. Before that only the `freelink` global did, which still works.
+`craft.freelink` and the `freelink` global both work (in Blade, `$freelink`). `getLink()` and
+`iconSvg` return `Illuminate\Support\HtmlString`, which Twig and Blade output unescaped.
 
 ### Conditionals
 
@@ -399,8 +413,7 @@ FreeLink works out of the box with [`craftcms/element-api`](https://github.com/c
 
 ```php
 // config/element-api.php
-use craft\elementapi\Plugin as ElementApi;
-use craft\elements\Entry;
+use CraftCms\Cms\Entry\Elements\Entry;
 
 return [
     'endpoints' => [
@@ -451,7 +464,7 @@ Element link fields include additional metadata:
     "isElement": true,
     "elementId": 42,
     "elementSiteId": 1,
-    "elementType": "craft\\elements\\Entry",
+    "elementType": "CraftCms\\Cms\\Entry\\Elements\\Entry",
     "elementTitle": "My Blog Post",
     "elementUrl": "https://example.com/blog/my-post",
     "elementStatus": "live"
@@ -470,27 +483,22 @@ $data = $link->toApiArray();
 
 ## Custom Link Types
 
-Register custom link types via the `EVENT_REGISTER_LINK_TYPES` event:
+Register custom link types by listening for the `RegisterLinkTypes` event:
 
 ```php
-use justinholtweb\freelink\events\RegisterLinkTypesEvent;
-use justinholtweb\freelink\services\Links;
-use yii\base\Event;
+use Illuminate\Support\Facades\Event;
+use JustinHoltWeb\FreeLink\Events\RegisterLinkTypes;
 
-Event::on(
-    Links::class,
-    Links::EVENT_REGISTER_LINK_TYPES,
-    function(RegisterLinkTypesEvent $event) {
-        $event->types[] = MyCustomLinkType::class;
-    },
-);
+Event::listen(RegisterLinkTypes::class, function (RegisterLinkTypes $event) {
+    $event->types[] = MyCustomLinkType::class;
+});
 ```
 
-Your custom type should extend `justinholtweb\freelink\base\Link` (for simple links) or `justinholtweb\freelink\base\ElementLink` (for element links), and implement the `displayName()` and `handle()` static methods.
+Your custom type should extend `JustinHoltWeb\FreeLink\Base\Link` (for simple links) or `JustinHoltWeb\FreeLink\Base\ElementLink` (for element links), and implement the `displayName()` and `handle()` static methods. Validation uses Laravel rules: override `getRules()`, or `checks()` for anything a rule string can't express.
 
 ## MCP
 
-On Craft 5.12.1 and later, FreeLink takes part in Craft's MCP server.
+FreeLink takes part in Craft 6's MCP server, with the same tools as FreeLink 5.3.
 
 - **Fields**: Craft's element tools (`elements_get`, `elements_update`, `elements_field_schema`…) read
   and write FreeLink fields. The field describes its own input (only the link types it enables, only
@@ -503,43 +511,37 @@ On Craft 5.12.1 and later, FreeLink takes part in Craft's MCP server.
   - `freelink_check_links` — broken links from stored state: element-link targets, unsafe or
     malformed URLs, and the results of FreeLink's HTTP checks. It never makes a request.
 - **Admin tools**: `freelink_migration_status`, and `freelink_migrate` (only where admin changes are
-  allowed; a dry run unless `dryRun: false` and `confirm` set to the source name).
+  allowed; a dry run unless `dryRun: false` and `confirm` set to the source name). On Craft 6 only
+  `craftlink` runs; the other sources explain that they have to be migrated on Craft 5.
 
-## Migrating from Other Plugins
+Craft's MCP tool list is paged (50 per page); FreeLink's tools come after core's, so clients have
+to follow `nextCursor` to see them.
 
-FreeLink includes console commands to migrate data from four popular link plugins. Each command converts the field type, transforms content data, and creates relations table rows for element links.
+## Migrating from Craft's Link field
+
+FreeLink converts Craft's own Link field — the field type and every stored value, drafts and
+revisions included — into a FreeLink field with the same ID, handle and name:
 
 ```bash
-# Migrate from Verbb Hyper
-php craft freelink/migrate/from-hyper
-
-# Migrate from Linkit
-php craft freelink/migrate/from-linkit
-
-# Migrate from Typed Link Field
-php craft freelink/migrate/from-typed-link
-
-# Migrate from Craft's native Link field
-php craft freelink/migrate/from-craft-link
-
-# Check migration status
-php craft freelink/migrate/status
+php artisan freelink:migrate:from-craft-link --dry-run              # report only
+php artisan freelink:migrate:from-craft-link --field=cta --backup   # one field, back up first
+php artisan freelink:migrate:status
 ```
-
-### Options
 
 | Flag | Description |
 |------|-------------|
-| `--field=<handle>` | Migrate a specific field only |
-| `--backup` | Create a full database backup before migrating |
-| `--dry-run` | Preview changes without applying them |
+| `-f`, `--field=<handle>` | Migrate a specific field only |
+| `-b`, `--backup` | Back up the database first (Craft's backup); the migration stops if the backup fails |
+| `-d`, `--dry-run` | Report what would change without writing anything |
 
-### Safety
+Link types map one to one (URL, email, phone, SMS, entry, asset). Root-relative URLs, anchors and
+custom schemes become **Custom** links. Craft's `download`/`filename` attributes have no FreeLink
+equivalent and are dropped.
 
-- All migrators log each step to the `freelink_migrations` table
-- `--dry-run` previews the entire migration without writing anything
-- `--backup` uses Craft's built-in backup system before starting
-- Migrate one field at a time with `--field` to reduce risk
+**Hyper, Linkit and Typed Link Field** have no Craft 6 versions, so their content can't be read
+here. Run FreeLink 5.3's migration for them on Craft 5, before upgrading. The
+`freelink:migrate:from-hyper`, `…from-linkit` and `…from-typed-link` commands still exist and say
+so.
 
 ## Storage Architecture
 
@@ -584,15 +586,17 @@ This means:
 - Deleting a target element sets `targetId` to null (the link gracefully becomes empty)
 - Queries against the relations table use proper indexes and foreign keys
 
-### Link index and check results (5.3)
+### Link index and check results
 
 - `freelink_index` — one row per link in live content (owner, root owner, field, position, type,
   target or URL and host). Derived from the two stores above; rebuilt by
-  `php craft freelink/links/reindex`.
+  `php artisan freelink:links:reindex`.
 - `freelink_checks` — the last HTTP check of each distinct URL (status, HTTP code, final URL, error,
   time).
 
-The design of 5.3 is documented in `docs/5.3-design.md`.
+Craft 6 keeps field values in `elements_sites.content`, keyed by the field layout element's UID;
+FreeLink's JSON is unchanged inside it. The design is documented in `docs/5.3-design.md`; the
+Craft 6 port's decisions are in `docs/6.0-notes.md`.
 
 ## License
 

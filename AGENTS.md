@@ -4,12 +4,12 @@
 
 ## Project
 
-FreeLink is a commercial Craft CMS 5 link field plugin.
+FreeLink is a commercial Craft CMS link field plugin. This branch (`6.0.0`) is the native Craft 6 port: no Yii, no yii2-adapter, no `craft\`/`yii\` namespaces, no `Craft::`. Port decisions: `docs/6.0-notes.md`.
 
 - **Package**: `justinholtweb/craft-freelink`
-- **Namespace**: `justinholtweb\freelink`
+- **Namespace**: `JustinHoltWeb\FreeLink`
 - **Handle**: `freelink`
-- **PHP**: 8.2+ | **Craft CMS**: ^5.0.0
+- **PHP**: 8.5+ | **Craft CMS**: ^6.0.0-beta.1 (Laravel 13)
 - **License**: Commercial (Craft Plugin Store)
 
 ## Architecture
@@ -21,7 +21,7 @@ FreeLink is a commercial Craft CMS 5 link field plugin.
 
 ### Models (Not Elements)
 
-Links extend `yii\base\Model`, NOT `craft\base\Element`. This avoids the overhead and cache table that element-based link plugins require.
+Links extend `Models\Model` (a `CraftCms\Cms\Component\Component`), NOT an element. This avoids the overhead and cache table that element-based link plugins require.
 
 ### Key Classes
 
