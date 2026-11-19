@@ -90,7 +90,7 @@ check('freelink_check_links findings', checks == ['disabledTarget', 'pendingTarg
 check('freelink_check_links filtered', [f['check'] for f in body(r[6]).get('findings', [])] == ['unsafeUrl'], body(r[6]))
 b = body(r[7])
 # fl6Native is a Craft Link field until checks-migrate.php converts it.
-check('freelink_migration_status', 'available' in b and 'history' in b and (any(a['source'] == 'craftlink' for a in b['available']) or any(h['source'] == 'craftlink' for h in b['history'])), b)
+check('freelink_migration_status', isinstance(b.get('available'), list) and isinstance(b.get('history'), list) and all(a['source'] == 'craftlink' for a in b['available']), b)
 b = body(r[8])
 check('freelink_migrate dry run', b.get('success') is True and b.get('dryRun') is True and any('DRY RUN' in l or 'No matching fields' in l for l in b.get('log', [])), b)
 check('freelink_migrate real run needs confirm', is_error(r[9]), r[9])
