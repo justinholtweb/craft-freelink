@@ -151,6 +151,10 @@ class SsrfGuard
             $hostPart = str_contains($ip, ':') ? '[' . $ip . ']' : $ip;
             $url = self::replaceHost($url, $hostPart);
             $host = $hostPart;
+        } else {
+            // Request the normalised host (lower case, no trailing dot, IDN as ASCII): it's the name
+            // the connection is pinned for, so the client must not see a different spelling of it.
+            $url = self::replaceHost($url, $host);
         }
 
         // Fragments are never sent.

@@ -121,6 +121,31 @@ class SsrfGuardTest extends TestCase
         self::assertSame('https://public.test/page?x=1', $target['url'], 'fragment dropped');
     }
 
+    public function testTrailingDotHostIsRequestedWithoutIt(): void
+    {
+        $target = $this->guard()->check('http://public.test./path?q=1');
+
+        self::assertSame('public.test', $target['host']);
+        self::assertSame('http://public.test/path?q=1', $target['url']);
+    }
+
+    public function testMixedCaseHostIsRequestedLowerCase(): void
+    {
+        $target = $this->guard()->check('https://PuBlIc.TeSt:443/A/B');
+
+        self::assertSame('public.test', $target['host']);
+        self::assertSame('https://public.test:443/A/B', $target['url'], 'only the host is lower-cased');
+    }
+
+    public function testIdnHostIsRequestedAsAscii(): void
+    {
+        if (!function_exists('idn_to_ascii')) {
+            self::markTestSkipped('intl not available');
+        }
+
+        self::assertSame('http://xn--bcher-kva.test/', $this->guard()->check('http://BÜCHER.test/')['url']);
+    }
+
     public function testDualStackPrefersIpv4(): void
     {
         self::assertSame('93.184.215.14', $this->guard()->check('http://dual.test/')['ip']);

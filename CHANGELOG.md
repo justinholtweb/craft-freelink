@@ -36,7 +36,8 @@
   links now**) or `php craft freelink/links/check`, with strict SSRF protection: http/https only,
   private, loopback, link-local, reserved, multicast and cloud-metadata addresses refused (IPv4 and
   IPv6, including IPv4-mapped and decimal/octal/hex forms), connections pinned to the checked
-  address, every redirect hop re-checked (5 at most), 5-second timeouts and a 64 KB cap. Checks can
+  address (the request uses the same normalised host name as the pin, and a response from any other
+  address is refused), every redirect hop re-checked (5 at most), 5-second timeouts and a 64 KB cap. Checks can
   be turned off in the settings. Only URLs saved in FreeLink fields are ever requested.
 - New permissions: **View the Links screen and link status** and **Queue link checks**.
 - An optional icon per link (field settings **Allow icons** and **Include Font Awesome Pro icons**),

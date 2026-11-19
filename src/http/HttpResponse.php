@@ -11,6 +11,8 @@ class HttpResponse
         public readonly int $code = 0,
         public readonly ?string $location = null,
         public readonly ?string $error = null,
+        /** The address the client actually connected to (CURLINFO_PRIMARY_IP). */
+        public readonly ?string $primaryIp = null,
     ) {
     }
 }

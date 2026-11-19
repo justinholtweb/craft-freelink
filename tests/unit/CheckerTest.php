@@ -32,8 +32,10 @@ class CheckerTest extends TestCase
             {
                 $this->test->requests[] = [$method, $url, $host, $ip, $pin];
                 $r = $this->script[$url] ?? new HttpResponse(0, null, 'no route');
+                $r = is_array($r) ? ($r[$method] ?? new HttpResponse(0, null, 'no route')) : $r;
 
-                return is_array($r) ? ($r[$method] ?? new HttpResponse(0, null, 'no route')) : $r;
+                // A well-behaved client connects where it was pinned, unless the script says otherwise.
+                return $r->primaryIp !== null ? $r : new HttpResponse($r->code, $r->location, $r->error, $ip);
             }
         };
 
@@ -163,6 +165,46 @@ class CheckerTest extends TestCase
         $result = $this->checker([])->checkUrl('http://10.0.0.1/');
         self::assertSame('blocked', $result['status']);
         self::assertSame([], $this->requests);
+    }
+
+    public function testConnectingToAnotherAddressThanTheCheckedOneIsBlocked(): void
+    {
+        // e.g. the pin didn't match the client's host and it resolved the name itself.
+        $result = $this->checker([
+            'https://site.test/' => new HttpResponse(200, null, null, '127.0.0.1'),
+        ])->checkUrl('https://site.test/');
+
+        self::assertSame('blocked', $result['status']);
+        self::assertStringContainsString('other than the one checked', (string)$result['error']);
+        self::assertCount(1, $this->requests, 'no GET fallback or redirect follow-up');
+    }
+
+    public function testMismatchOnARedirectHopIsBlocked(): void
+    {
+        $result = $this->checker([
+            'https://site.test/' => new HttpResponse(301, 'https://other.test/'),
+            'https://other.test/' => new HttpResponse(200, null, null, '10.0.0.7'),
+        ])->checkUrl('https://site.test/');
+
+        self::assertSame('blocked', $result['status']);
+        self::assertSame(1, $result['redirects']);
+    }
+
+    public function testSameIpCompareIsNotationIndependent(): void
+    {
+        self::assertTrue(Checker::sameIp('2606:4700:4700::1111', '2606:4700:4700:0:0:0:0:1111'));
+        self::assertTrue(Checker::sameIp('[::1]', '::1'));
+        self::assertFalse(Checker::sameIp('93.184.215.14', '93.184.215.15'));
+        self::assertFalse(Checker::sameIp(null, '93.184.215.14'));
+        self::assertFalse(Checker::sameIp('', ''));
+    }
+
+    public function testNormalisedHostIsWhatIsRequestedAndPinned(): void
+    {
+        $this->checker(['https://site.test/a' => new HttpResponse(200)])->checkUrl('https://SITE.Test./a');
+
+        self::assertSame('https://site.test/a', $this->requests[0][1], 'URL rebuilt from the normalised host');
+        self::assertSame('site.test', $this->requests[0][2], 'pinned for the same host');
     }
 
     public function testRunIsSkippedWhenChecksAreOff(): void

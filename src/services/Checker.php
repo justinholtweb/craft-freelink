@@ -81,9 +81,21 @@ class Checker extends Component
             $pin = !$target['isIpLiteral'];
             $response = $transport->request('HEAD', $target['url'], $target['host'], $target['port'], $target['ip'], $pin);
 
+            // The pin must have held: whatever answered has to be the address the guard approved.
+            // Checked after every request, before anything else is done with the answer.
+            $mismatch = fn($r) => $r->code > 0 && !self::sameIp($r->primaryIp, $target['ip']);
+
+            if ($mismatch($response)) {
+                return $this->result('blocked', null, $redirects ? $current : null, $redirects, 'Connected to an address other than the one checked');
+            }
+
             // Some servers refuse or mishandle HEAD: one GET, with the byte cap.
             if ($response->error !== null || in_array($response->code, [400, 403, 405, 501], true)) {
                 $response = $transport->request('GET', $target['url'], $target['host'], $target['port'], $target['ip'], $pin);
+
+                if ($mismatch($response)) {
+                    return $this->result('blocked', null, $redirects ? $current : null, $redirects, 'Connected to an address other than the one checked');
+                }
             }
 
             if ($response->error !== null && $response->code === 0) {
@@ -221,6 +233,21 @@ class Checker extends Component
         }
 
         $this->_lastRequest[$host] = microtime(true);
+    }
+
+    /**
+     * Whether two IP address strings are the same address (any notation).
+     */
+    public static function sameIp(?string $a, ?string $b): bool
+    {
+        if ($a === null || $b === null || $a === '' || $b === '') {
+            return false;
+        }
+
+        $pa = @inet_pton(trim($a, '[]'));
+        $pb = @inet_pton(trim($b, '[]'));
+
+        return $pa !== false && $pb !== false && $pa === $pb;
     }
 
     /**
