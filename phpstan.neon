@@ -11,4 +11,3 @@ parameters:
         # PHPStan cannot resolve the template type. Return is ElementInterface|null.
         -
             message: '#Unable to resolve the template type T in call to method craft\\services\\Elements::getElementById\(\)#'
-            path: src/twig/Extension.php
