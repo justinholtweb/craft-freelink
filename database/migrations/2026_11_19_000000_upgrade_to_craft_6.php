@@ -6,6 +6,7 @@ use CraftCms\Cms\Database\Migration;
 use CraftCms\Cms\Database\Table;
 use CraftCms\Cms\Entry\Elements\Entry;
 use CraftCms\Cms\ProjectConfig\ProjectConfig;
+use CraftCms\Cms\ProjectConfig\ProjectConfigHelper;
 use CraftCms\Cms\Support\Facades\Sites;
 use CraftCms\Cms\Support\Json;
 use Illuminate\Support\Facades\DB;
@@ -221,7 +222,14 @@ return new class extends Migration
         try {
             foreach ($fieldUids as $uid) {
                 $config = $projectConfig->get("fields.$uid");
-                $linkTypes = $config['settings']['linkTypes'] ?? null;
+
+                if (! is_array($config) || ! is_array($config['settings'] ?? null)) {
+                    continue;
+                }
+
+                // Project config keeps associative arrays packed (`__assoc__`); unpack to read them.
+                $settings = ProjectConfigHelper::unpackAssociativeArrays($config['settings']);
+                $linkTypes = $settings['linkTypes'] ?? null;
 
                 if (! is_array($linkTypes) || empty($linkTypes['category']['enabled'])) {
                     continue;
@@ -233,10 +241,12 @@ return new class extends Migration
                     ['enabled' => true],
                 );
                 $linkTypes['category']['enabled'] = false;
-                $config['settings']['linkTypes'] = $linkTypes;
+                $settings['linkTypes'] = $linkTypes;
+                $config['settings'] = ProjectConfigHelper::packAssociativeArrays($settings);
 
                 $projectConfig->set("fields.$uid", $config, 'Offer entry links where FreeLink offered category links');
-                DB::table(Table::FIELDS)->where('uid', $uid)->update(['settings' => Json::encode($config['settings'])]);
+                // The fields table holds settings unpacked.
+                DB::table(Table::FIELDS)->where('uid', $uid)->update(['settings' => Json::encode($settings)]);
                 Log::info("FreeLink: field {$uid} offered category links; it offers entry links now.");
             }
 
