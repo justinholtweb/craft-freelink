@@ -1,6 +1,6 @@
 # Changelog
 
-## 5.3.0 - Unreleased
+## 5.3.0 - 2026-11-19
 
 > {note} The 5.3 migration adds two tables and queues an "Indexing FreeLink links" job that builds the
 > link index from existing content. The Links screen fills in once it has run.
