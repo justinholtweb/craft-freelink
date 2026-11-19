@@ -456,6 +456,32 @@ check('changing the disabled-type link’s destination fails', fn() => count($e 
     ['type' => 'url', 'value' => 'https://kept.example.org/'],
 ])) === 1 ?: json_encode($e));
 
+check('a disallowed link saved into a draft is refused when the draft is published', function() use ($gfType) {
+    $canonical = Entry::find()->id($gfType->id)->status(null)->one();
+    $draft = Craft::$app->getDrafts()->createDraft($canonical, 1);
+    // Drafts save without field validation, so the disallowed link lands in the draft row.
+    $draft->setFieldValue('freelinkItTest', [['type' => 'custom', 'value' => '#smuggled']]);
+    Craft::$app->getElements()->saveElement($draft, false);
+
+    // What the CP's "Apply draft" does first (ElementsController::actionApplyDraft): save the draft
+    // with live validation; only a valid draft is applied to the canonical entry.
+    $reloaded = Entry::find()->id($draft->id)->drafts(true)->status(null)->one();
+    $reloaded->setScenario(Element::SCENARIO_LIVE);
+    $saved = Craft::$app->getElements()->saveElement($reloaded);
+    $errors = $reloaded->getErrors('freelinkItTest');
+    Craft::$app->getElements()->deleteElement($reloaded, true);
+
+    $after = Entry::find()->id($gfType->id)->status(null)->one()->getFieldValue('freelinkItTest')->first()?->value;
+
+    return !$saved && count($errors) === 1 && $after === '#kept' ?: json_encode([$saved, $errors, $after]);
+});
+
+check('an unchanged live link still saves after a refused draft', function() use ($gfType) {
+    $fresh = Entry::find()->id($gfType->id)->status(null)->one();
+    $fresh->setScenario(Element::SCENARIO_LIVE);
+    return Craft::$app->getElements()->saveElement($fresh) ?: json_encode($fresh->getErrors());
+});
+
 saveFieldSettings(['linkTypes' => $typesWithCustom]);
 
 $cannotView = new craft\elements\User(['id' => 999999991, 'username' => 'fl53-nobody', 'admin' => false]);
@@ -474,6 +500,27 @@ check('changing the target to one the editor can’t view fails', function() use
     try {
         $errors = $revalidate($gfView, [['type' => 'entry', 'targetId' => $tExpired->id]]);
         return count($errors) === 1 && str_contains($errors[0], 'can’t link') ?: json_encode($errors);
+    } finally {
+        Craft::$app->getUser()->setIdentity(null);
+    }
+});
+
+check('changing only the target site re-runs the checks', function() use ($revalidate, $gfView, $cannotView, $tLive, $siteId) {
+    $otherSite = null;
+    foreach (Craft::$app->getSites()->getAllSites() as $site) {
+        if ($site->id !== $siteId) {
+            $otherSite = $site->id;
+            break;
+        }
+    }
+    if (!$otherSite) {
+        return 'needs a second site';
+    }
+    Craft::$app->getUser()->setIdentity($cannotView);
+    try {
+        $same = $revalidate($gfView, [['type' => 'entry', 'targetId' => $tLive->id]]);
+        $moved = $revalidate($gfView, [['type' => 'entry', 'targetId' => $tLive->id, 'targetSiteId' => $otherSite]]);
+        return $same === [] && count($moved) === 1 ?: json_encode([$same, $moved]);
     } finally {
         Craft::$app->getUser()->setIdentity(null);
     }

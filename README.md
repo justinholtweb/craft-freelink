@@ -64,9 +64,10 @@ The condition does two things:
   before the condition was added keep saving as long as their target doesn't change (5.3+). Like
   Craft's own field validation, this check runs on live saves, not on drafts.
 
-The same rule covers the other save checks: a link whose type and destination are unchanged is never
-refused because its link type was turned off later or because the editor can't view its target.
-Only new or changed links are checked.
+The same rule covers the other save checks: a link whose type and destination (including the target's
+site) are unchanged from the published element is never refused because its link type was turned off
+later or because the editor can't view its target. Only new or changed links are checked, and links
+in a draft are compared with the published element, so they're checked when the draft is applied.
 
 Rules that depend on the entry being edited, such as "related to the current entry", are given that
 entry as their reference element. Fields with no condition behave as they did before.

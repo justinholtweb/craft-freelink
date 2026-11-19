@@ -689,7 +689,7 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
     public static function linkKey(Link $link): string
     {
         if ($link instanceof ElementLink) {
-            return $link->type . '|#' . (int)$link->targetId;
+            return $link->type . '|#' . (int)$link->targetId . '|' . (int)$link->targetSiteId;
         }
 
         $key = $link->type . '|' . (string)$link->value;
@@ -702,39 +702,47 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
     }
 
     /**
-     * The links stored for this field on the element and its canonical element, keyed by linkKey().
+     * The links stored for this field in the element's live content, keyed by linkKey(): the
+     * canonical element as saved (never a draft, provisional draft or revision). Only that content
+     * passed live validation, so it is the only baseline a link can be grandfathered against. A new
+     * element, or a draft of one, has none.
      *
      * @return array<string, Link>
      */
     public function storedLinks(ElementInterface $element): array
     {
-        $links = [];
+        $canonicalId = $element->getCanonicalId();
+
+        if (!$canonicalId) {
+            return [];
+        }
+
         $siteId = $element->siteId ?? Craft::$app->getSites()->getCurrentSite()->id;
 
-        foreach (array_unique(array_filter([$element->id, $element->getCanonicalId()])) as $id) {
-            $stored = $element::find()
-                ->id($id)
-                ->siteId($siteId)
-                ->status(null)
-                ->drafts(null)
-                ->provisionalDrafts(null)
-                ->revisions(null)
-                ->one();
+        $stored = $element::find()
+            ->id($canonicalId)
+            ->siteId($siteId)
+            ->status(null)
+            ->drafts(false)
+            ->provisionalDrafts(false)
+            ->revisions(false)
+            ->one();
 
-            if (!$stored) {
-                continue;
-            }
+        if (!$stored) {
+            return [];
+        }
 
-            try {
-                $value = $stored->getFieldValue($this->handle);
-            } catch (\Throwable) {
-                continue;
-            }
+        try {
+            $value = $stored->getFieldValue($this->handle);
+        } catch (\Throwable) {
+            return [];
+        }
 
-            if ($value instanceof LinkCollection) {
-                foreach ($value->getAll() as $link) {
-                    $links[self::linkKey($link)] ??= $link;
-                }
+        $links = [];
+
+        if ($value instanceof LinkCollection) {
+            foreach ($value->getAll() as $link) {
+                $links[self::linkKey($link)] ??= $link;
             }
         }
 
@@ -794,26 +802,15 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
     /**
      * Whether whoever is saving may point a link at this target.
      *
-     * Only targets that are new to this field are checked, so an editor can still save content that
-     * links to something someone else chose. A signed-in user (CP, MCP) must be able to view the
-     * target; a GraphQL schema must be able to query it. Otherwise a token or agent could link to an
+     * validateLinks() only calls this for new or changed links (see storedLinks()), so an editor can
+     * still save live content that links to something someone else chose. A signed-in user (CP,
+     * MCP) must be able to view the target; a GraphQL schema must be able to query it. Otherwise a token or agent could link to an
      * element it can't see and read its URL and title back from the link.
      */
     public function actorMayLinkTo(ElementLink $link, ElementInterface $owner): bool
     {
         if (!$link->targetId) {
             return true;
-        }
-
-        $siteId = (int)($owner->siteId ?? Craft::$app->getSites()->getCurrentSite()->id);
-        $relations = Plugin::getInstance()->relations;
-
-        foreach (array_unique(array_filter([$owner->id, $owner->getCanonicalId()])) as $ownerId) {
-            foreach ($relations->getRelations((int)$this->id, (int)$ownerId, $siteId) as $existing) {
-                if ((int)$existing['targetId'] === (int)$link->targetId) {
-                    return true;
-                }
-            }
         }
 
         if (GqlScope::isActive() && !GqlScope::canQuery((int)$link->targetId)) {

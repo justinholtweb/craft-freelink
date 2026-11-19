@@ -41,10 +41,12 @@
 - Saving now refuses a new or changed link of a type the field doesn't enable, an element link to an
   element that doesn't exist, and an element link to an element the person (or GraphQL schema)
   saving can't view. The control panel never offered these; a POST, GraphQL or MCP could.
-- Links that are already saved are left alone by these checks and by the selection condition: a link
-  whose type and destination haven't changed still saves after the field is tightened (a type turned
+- Links that are already saved in live content are left alone by these checks and by the selection
+  condition: a link whose type and destination (including the target's site) match the published
+  element still saves after the field is tightened (a type turned
   off, a condition added) or when the editor can't view its target. Editing its label or other
-  attributes doesn't count as a change. A link whose target was deleted becomes empty.
+  attributes doesn't count as a change. Links in drafts are always checked when the draft is
+  published. A link whose target was deleted becomes empty.
 
 ### Fixed
 - Setting an element link's `targetId` in PHP, GraphQL, Feed Me or MCP on an existing element no
