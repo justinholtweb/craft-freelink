@@ -28,6 +28,12 @@ class ElementLink extends Link
      */
     public string|array $sources = '*';
 
+    /**
+     * The site of the element holding the link, when loaded through a field. The target's site when
+     * the link names none (not stored).
+     */
+    public ?int $ownerSiteId = null;
+
     private ?ElementInterface $element = null;
 
     private bool $elementLoaded = false;
@@ -125,7 +131,7 @@ class ElementLink extends Link
 
         try {
             if (GqlScope::isActive()) {
-                return GqlScope::canQuery($this->targetId);
+                return GqlScope::canQuery($this->targetId, $this->targetSiteId ?? $this->ownerSiteId);
             }
 
             $user = currentUser();

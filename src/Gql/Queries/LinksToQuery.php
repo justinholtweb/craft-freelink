@@ -58,8 +58,11 @@ final class LinksToQuery extends Query
     {
         $elementId = (int) $arguments['elementId'];
 
-        // No existence oracle: a target the schema can't read has no links.
-        if ($elementId <= 0 || ! GqlScope::canQuery($elementId)) {
+        $siteId = isset($arguments['siteId']) ? (int) $arguments['siteId'] : null;
+
+        // No existence oracle: a target the schema can't read (on that site, or on any site it can
+        // read) has no links.
+        if ($elementId <= 0 || ! GqlScope::canQuery($elementId, $siteId)) {
             return [];
         }
 

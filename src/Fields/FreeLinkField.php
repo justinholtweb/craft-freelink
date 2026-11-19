@@ -607,6 +607,10 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
 
             $link = $links->createLink($linkData);
 
+            if ($link instanceof ElementLink && $element?->siteId) {
+                $link->ownerSiteId = (int) $element->siteId;
+            }
+
             if ($link) {
                 $result[] = $link;
             }
@@ -804,7 +808,7 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
                     continue;
                 }
 
-                if (! $this->linkTargetExists($link) || ! $this->actorMayLinkTo($link)) {
+                if (! $this->linkTargetExists($link) || ! $this->actorMayLinkTo($link, $element)) {
                     $errors[] = t('{attribute}: you can’t link to the {type} chosen for link {num}.', [
                         'attribute' => $name,
                         'type' => mb_strtolower($link::displayName()),
@@ -879,7 +883,7 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
                 continue;
             }
 
-            if (! $unchanged && $link instanceof ElementLink && $link->targetId && ! $this->actorMayLinkTo($link)) {
+            if (! $unchanged && $link instanceof ElementLink && $link->targetId && ! $this->actorMayLinkTo($link, $element)) {
                 $errors[] = t('{attribute}: you can’t link to the {type} chosen for link {num}.', [
                     'attribute' => $name,
                     'type' => mb_strtolower($link::displayName()),
@@ -1032,13 +1036,16 @@ class FreeLinkField extends Field implements InputSchemaFieldInterface, McpOutpu
      * MCP) must be able to view the target; a GraphQL schema must be able to query it. Otherwise a
      * token or agent could link to an element it can't see and read its URL and title back.
      */
-    public function actorMayLinkTo(ElementLink $link): bool
+    public function actorMayLinkTo(ElementLink $link, ?ElementInterface $owner = null): bool
     {
         if (! $link->targetId) {
             return true;
         }
 
-        if (GqlScope::isActive() && ! GqlScope::canQuery($link->targetId)) {
+        // The schema must be able to read the target on the site the link points at.
+        $siteId = $link->targetSiteId ?? ($owner?->siteId ? (int) $owner->siteId : $link->ownerSiteId);
+
+        if (GqlScope::isActive() && ! GqlScope::canQuery($link->targetId, $siteId)) {
             return false;
         }
 

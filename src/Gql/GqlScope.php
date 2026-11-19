@@ -11,6 +11,7 @@ use CraftCms\Cms\Element\Contracts\ElementInterface;
 use CraftCms\Cms\Element\Queries\Contracts\ElementQueryInterface;
 use CraftCms\Cms\Entry\Elements\Entry;
 use CraftCms\Cms\Gql\Gql;
+use CraftCms\Cms\Gql\GqlHelper;
 use CraftCms\Cms\Gql\Resolvers\Elements\Address as AddressResolver;
 use CraftCms\Cms\Gql\Resolvers\Elements\Asset as AssetResolver;
 use CraftCms\Cms\Gql\Resolvers\Elements\Entry as EntryResolver;
@@ -67,6 +68,19 @@ final class GqlScope
             return [];
         }
 
+        // Craft's element resolvers don't apply the schema's site scopes (the query condition
+        // builder does, later), so the site is checked here: a given site must be one the schema can
+        // read, and without one only readable sites count.
+        $allowedSiteIds = self::allowedSiteIds();
+
+        if ($siteId !== null && ! in_array($siteId, $allowedSiteIds, true)) {
+            return [];
+        }
+
+        if ($allowedSiteIds === []) {
+            return [];
+        }
+
         $rows = DB::table(Table::ELEMENTS)
             ->select(['type', 'id'])
             ->whereIn('id', $ids)
@@ -88,9 +102,10 @@ final class GqlScope
             }
 
             // Any status: a schema can always ask for disabled/pending elements with `status: null`.
-            $arguments = ['id' => $classIds, 'status' => null];
-            if ($siteId) {
-                $arguments['siteId'] = $siteId;
+            $arguments = ['id' => $classIds, 'status' => null, 'siteId' => $siteId ?? $allowedSiteIds];
+
+            if ($siteId === null) {
+                $arguments['unique'] = true;
             }
 
             try {
@@ -111,6 +126,24 @@ final class GqlScope
         return $allowed;
     }
 
+    /**
+     * IDs of the sites the active schema may read.
+     *
+     * @return int[]
+     */
+    public static function allowedSiteIds(): array
+    {
+        try {
+            return array_map(fn ($site) => (int) $site->id, GqlHelper::getAllowedSites());
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Whether the active schema may query an element, on the given site (or, with none, on any site
+     * it can read). Pass the link's target site, or the owner's site when the link names none.
+     */
     public static function canQuery(int $id, ?int $siteId = null): bool
     {
         return in_array($id, self::filterQueryable([$id], $siteId), true);
