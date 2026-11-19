@@ -12,7 +12,7 @@ FreeLink takes a different approach to link fields:
 
 ## Requirements
 
-- Craft CMS 5.0.0+
+- Craft CMS 5.0.0+ (the MCP features need Craft 5.12.1+; everything else works on any Craft 5)
 - PHP 8.2+
 
 ## Installation
@@ -66,6 +66,112 @@ The condition does two things:
 
 Rules that depend on the entry being edited, such as "related to the current entry", are given that
 entry as their reference element. Fields with no condition behave as they did before.
+
+### Link icons
+
+Turn on **Allow icons** in the field settings and each link gets Craft's icon picker. The icon name
+is stored with the link (`"icon": "arrow-right"`).
+
+Craft's icon set includes Font Awesome **Pro** icons, which are licensed for use in the control
+panel. Link icons render on your site, so the picker only offers the free icons unless you turn on
+**Include Font Awesome Pro icons** — do that only if you have your own Font Awesome Pro licence.
+
+```twig
+{{ entry.myLink.icon }}                         {# 'arrow-right' or null #}
+{{ entry.myLink.iconSvg }}                      {# inline <svg aria-hidden="true" …> #}
+{{ entry.myLink.getIconSvg({class: 'icon'}) }}  {# with your own attributes #}
+
+{% for link in entry.myLinks.all %}
+    <a href="{{ link.url }}">{{ link.iconSvg }} {{ link.text }}</a>
+{% endfor %}
+```
+
+## The FreeLink section
+
+FreeLink adds a section to the control panel sidebar.
+
+### Links
+
+**FreeLink → Links** lists every link in every FreeLink field on the site, 50 to a page. Filter by
+status, link type, field, site, source element type, section and target domain (a domain matches its
+subdomains too). Each row shows where the link is (linked to its edit page), the field, the type,
+where it points and its status. **Broken Links** shows only the links with a problem.
+
+The screen reads a link index FreeLink keeps alongside your content (`freelink_index`), so it stays
+fast on large sites. It covers live content: drafts and revisions are left out. After updating to
+5.3 the index is built by an "Indexing FreeLink links" queue job; admins can rebuild it any time
+with **Rebuild index** or `php craft freelink/links/reindex`.
+
+### Link checks
+
+- **Element links** are checked against the database whenever the screen loads. A link is flagged
+  when its target was deleted, is in the trash, is disabled, isn't published yet, or has expired.
+- **URL links** (URL links, and Custom links with an http/https URL) are checked over HTTP, but
+  only from a queue job — **Check links now** — or the console:
+
+  ```bash
+  php craft freelink/links/check            # URLs not checked in the last 24 hours
+  php craft freelink/links/check --force    # all of them
+  php craft freelink/links/status           # counts
+  ```
+
+  A run requests each distinct URL once (HEAD, then GET when a server refuses HEAD), one at a time,
+  with a pause between requests to the same host, and records the status, HTTP code, final URL and
+  time. Schedule it with cron if you want regular checks.
+
+The checker is built to never become a way into your network. It requests only http and https URLs
+saved in FreeLink fields — nothing a visitor, an editor's request, GraphQL or MCP supplies. Before
+every request, and again for every redirect (5 at most), it resolves the host and refuses
+private, loopback, link-local, shared (CGNAT), reserved, documentation, multicast and cloud-metadata
+addresses (`169.254.169.254`, `fd00:ec2::254`…), in IPv4 and IPv6, including IPv4-mapped IPv6 and
+the decimal, octal and hex ways of writing an IPv4 address. It connects to the address it checked
+(so DNS can't be switched between the check and the request), ignores proxy settings, sends no
+cookies, gives up after 5 seconds and reads at most 64 KB. Its user agent is
+`FreeLinkChecker/5.3 (+Craft CMS link checker)`.
+
+To check intranet links, list their hosts — and any extra ports — in `config/freelink.php`. These
+can't be set from the control panel:
+
+```php
+<?php
+return [
+    'checkAllowedHosts' => ['intranet.example.com'],
+    'checkAllowedPorts' => [80, 443, 8443],
+];
+```
+
+### Settings
+
+**Settings → Plugins → FreeLink** (also linked from the section) has:
+
+- **Sidebar label** and **Sidebar icon** — rename the sidebar item and pick an icon from Craft's icon
+  set, or paste your own SVG. Pasted SVG must be a single `<svg>` element and is sanitised before it
+  is shown (scripts, event handlers and external references are removed). Craft 5 has no built-in
+  sidebar editor; if you use a plugin that customises the sidebar, its settings win.
+- **Show "Linked from" on edit screens**.
+- **Check URL links over HTTP** (turn it off and FreeLink never requests a URL), **Recheck after**
+  (hours), **Delay between requests to one host** (ms) and **URLs per check run**.
+
+All of these can also be set in `config/freelink.php`.
+
+### Permissions
+
+| Permission | Allows |
+|---|---|
+| Access FreeLink | Seeing the section |
+| View the Links screen and link status | Links, Broken Links and the Linked from panel |
+| ↳ Queue link checks | The **Check links now** button |
+
+Migrations, **Rebuild index** and the plugin settings are for admins. Rows whose source a user can't
+view are listed without the source's name.
+
+### Migrations
+
+**FreeLink → Migrations** lists the link fields from Hyper, Linkit, Typed Link Field and Craft's Link
+field that can be converted, runs a migration (a dry run by default, with an optional database
+backup first) and shows the history. Running one for real needs admin changes to be allowed and
+asks for your password again. The console commands below do the same thing. The page used to be at
+`admin/freelink/migrate`, which now redirects.
 
 ## Twig Usage
 
@@ -149,12 +255,39 @@ target element automatically when you access it — no `.with()` needed:
 
 ### Reverse Lookups
 
-Find elements that link to a given element:
+Find the links that point at an element. `linksTo()` reads the link index, so it covers live
+content (not drafts or revisions) and tells you where each link is:
+
+```twig
+{% for ref in craft.freelink.linksTo(entry) %}
+    {{ ref.source.title }} links here from its {{ ref.fieldHandle }} field
+    ({{ ref.type }} link, position {{ ref.sortOrder }}, status {{ ref.status }}).
+    {# ref.rootSource is the top-level element when the link is inside a Matrix entry #}
+    {# ref.link is the Link itself #}
+{% endfor %}
+
+{# Options: field, type, site, limit (max 100), offset, status #}
+{% set refs = craft.freelink.linksTo(entry, {field: 'myLink', limit: 10}) %}
+
+{{ craft.freelink.linkCountTo(entry) }} links point here.
+```
+
+The same from PHP:
+
+```php
+use justinholtweb\freelink\Plugin as FreeLink;
+
+$refs = FreeLink::getInstance()->links->findLinksTo($entry, ['field' => 'myLink']);
+```
+
+`getRelatedElements()` still returns the elements whose FreeLink fields point at an element:
 
 ```twig
 {% set linkedFrom = craft.freelink.getRelatedElements(entry) %}
 {% set linkedFrom = craft.freelink.getRelatedElements(entry, 'myLink') %}
 ```
+
+`craft.freelink` exists from 5.3. Before that only the `freelink` global did, which still works.
 
 ### Conditionals
 
@@ -191,10 +324,67 @@ FreeLink fields return `[FreeLinkInterface]` (always an array; single-link mode 
       rel
       isEmpty
       isElement
+      icon
+      iconSvg
+      elementId
+      elementSiteId
+      elementType
+      subject   # email links
+      siteId    # site links
     }
   }
 }
 ```
+
+### Mutations
+
+FreeLink fields can be written with Craft's entry (and other element) save mutations. A field takes
+one `FreeLinkInput` in single-link mode and a list of them in multi-link mode:
+
+```graphql
+mutation {
+  save_news_article_Entry(
+    title: "Hello"
+    cta: { type: "url", value: "https://example.com", label: "Read more", newWindow: true }
+    relatedLinks: [
+      { type: "entry", targetId: 42 }
+      { type: "email", value: "hello@example.com", subject: "Hi" }
+      { type: "custom", value: "#top", htmlId: "back-to-top", icon: "arrow-up" }
+    ]
+  ) { id }
+}
+```
+
+`FreeLinkInput` has `type` (required), `value`, `targetId`, `targetSiteId`, `siteId`, `subject`,
+`label`, `newWindow`, `ariaLabel`, `title`, `urlSuffix`, `classes`, `htmlId`, `rel`, `icon` and
+`customAttributes: [{attribute, value}]`. Element link types take `targetId`; omit it to keep the
+element already at that position, or pass `null` to clear it.
+
+A mutation is validated exactly like a save in the control panel: only link types the field enables,
+per-type validation, no script URLs or event-handler attributes, icons, min/max links, required,
+selection conditions — and the target element must exist and be readable by the schema.
+
+### Reverse lookups
+
+Give a schema **FreeLink → Query reverse link lookups** and it can ask what links to an element:
+
+```graphql
+{
+  freelinkLinksTo(elementId: 42, field: "relatedLinks", limit: 20) {
+    sourceId
+    rootSourceId
+    field
+    type
+    position
+    status
+    source { id title url }
+    link { url text }
+  }
+}
+```
+
+It returns nothing for an element the schema can't read, and leaves out any source the schema
+can't read, so it never reveals content outside the schema's scope.
 
 ## Element API
 
@@ -291,6 +481,23 @@ Event::on(
 
 Your custom type should extend `justinholtweb\freelink\base\Link` (for simple links) or `justinholtweb\freelink\base\ElementLink` (for element links), and implement the `displayName()` and `handle()` static methods.
 
+## MCP
+
+On Craft 5.12.1 and later, FreeLink takes part in Craft's MCP server.
+
+- **Fields**: Craft's element tools (`elements_get`, `elements_update`, `elements_field_schema`…) read
+  and write FreeLink fields. The field describes its own input (only the link types it enables, only
+  the inputs it shows) and returns resolved links with their target element, which Craft filters by
+  what the agent's user may view. Writes are validated like any save, and a new target the user
+  can't view is refused.
+- **Tools** (for users with control panel access; results limited to sources they can view):
+  - `freelink_find_links_to` — what links to an element.
+  - `freelink_list_links` — the Links screen: by field, link type, domain, site, owner type.
+  - `freelink_check_links` — broken links from stored state: element-link targets, unsafe or
+    malformed URLs, and the results of FreeLink's HTTP checks. It never makes a request.
+- **Admin tools**: `freelink_migration_status`, and `freelink_migrate` (only where admin changes are
+  allowed; a dry run unless `dryRun: false` and `confirm` set to the source name).
+
 ## Migrating from Other Plugins
 
 FreeLink includes console commands to migrate data from four popular link plugins. Each command converts the field type, transforms content data, and creates relations table rows for element links.
@@ -369,6 +576,16 @@ This means:
 - Deleting a field or owner element automatically cleans up relations
 - Deleting a target element sets `targetId` to null (the link gracefully becomes empty)
 - Queries against the relations table use proper indexes and foreign keys
+
+### Link index and check results (5.3)
+
+- `freelink_index` — one row per link in live content (owner, root owner, field, position, type,
+  target or URL and host). Derived from the two stores above; rebuilt by
+  `php craft freelink/links/reindex`.
+- `freelink_checks` — the last HTTP check of each distinct URL (status, HTTP code, final URL, error,
+  time).
+
+The design of 5.3 is documented in `docs/5.3-design.md`.
 
 ## License
 

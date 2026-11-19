@@ -35,6 +35,10 @@ Links extend `yii\base\Model`, NOT `craft\base\Element`. This avoids the overhea
 | `Links` | `src/services/Links.php` | Link type registry |
 | `Relations` | `src/services/Relations.php` | `freelink_links` table CRUD, reverse lookups |
 | `Migrate` | `src/services/Migrate.php` | Migration orchestrator for Hyper/Linkit/Typed Link/Craft Link |
+| `LinkIndex` | `src/services/LinkIndex.php` | `freelink_index` (one row per link in live content): writes on save, Links-screen/reverse-lookup queries, element-link status in SQL (5.3) |
+| `Checker` | `src/services/Checker.php` | HTTP checks of stored URLs through `SsrfGuard` + `HttpTransport`, results in `freelink_checks` (5.3) |
+| `SsrfGuard` / `IpRanges` | `src/helpers/` | Which URLs/addresses the checker may reach. Pure PHP, unit-tested; port verbatim |
+| `LinkTools` / `MigrationTools` | `src/mcp/` | MCP tools (Craft 5.12.1+) |
 
 ### Link Types (12 built-in)
 
@@ -47,6 +51,11 @@ Commerce types (`Product`, `Variant`) check `isAvailable()` — returns false wi
 
 - `freelink_links` — Element relations. FKs to `fields`, `elements`, `sites`. Indexed on `(fieldId, ownerId, ownerSiteId)` and `(targetId)`.
 - `freelink_migrations` — Migration tracking/logging.
+- `freelink_index` — link index (derived; rebuild with `php craft freelink/links/reindex`). 5.3.
+- `freelink_checks` — last HTTP check per distinct URL (urlHash). 5.3.
+
+The 5.3 design (settings, permissions, routes, GraphQL, MCP, SSRF rules) is in `docs/5.3-design.md`;
+the Craft 6 port follows it.
 
 ## Serialization
 
@@ -144,6 +153,13 @@ src/
 - New migration in `src/migrations/`, update `Plugin::$schemaVersion`
 
 ## Testing
+
+### Integration (harness)
+
+`tests/integration/checks.php` (selection conditions), `features-5.3.php` (index, statuses, reverse
+lookups, validation, icons, URL checks against a local endpoint, GraphQL), `cp-5.3.php` (CP screens
+over HTTP) and `mcp-5.3.php` (MCP over stdio). Run each with
+`docker exec -w /var/www/html ddev-plugin-testing-web php <plugin path>/tests/integration/<file>`.
 
 ### Automated (PHPUnit)
 
