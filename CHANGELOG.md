@@ -1,5 +1,65 @@
 # Changelog
 
+## 6.0.0-beta.1 - 2026-11-19
+
+> {warning} A beta for Craft CMS 6, which is itself in beta. FreeLink 6 needs FreeLink 5.3.0 to have
+> been installed first; see [UPGRADING.md](UPGRADING.md). Craft 5 sites stay on FreeLink 5.x.
+
+FreeLink 6 is a native Craft 6 plugin: it runs on Laravel and has no dependency on the Yii 2
+adapter. Everything in 5.3 carries over — the field, its stored JSON, the link index, link checks,
+reverse lookups, GraphQL and MCP — with the same names, settings and permissions.
+
+### Changed
+- Requires Craft CMS 6.0.0-beta.1+ and PHP 8.5+.
+- Namespace `justinholtweb\freelink\…` is now `JustinHoltWeb\FreeLink\…` (`Base\Link`,
+  `Fields\FreeLinkField`, `Services\Links`…). The upgrade migration renames the stored field type.
+- The field's control panel UI is built from Craft 6's own controls (a table of Craft's link
+  editors, plus an icon picker and a custom-attributes column when the field uses them), replacing
+  FreeLink 5's Garnish/jQuery input.
+- Console commands are Artisan commands: `php artisan freelink:links:check`, `…:links:reindex`,
+  `…:links:status`, `…:migrate:from-craft-link`, `…:migrate:status`. The FreeLink 5 names
+  (`php craft freelink/links/check`…) still work.
+- The config file moves from `config/freelink.php` to `config/craft/freelink.php`.
+  `checkAllowedHosts` and `checkAllowedPorts` are read from that file only, never from stored
+  settings.
+- Custom link types register with `Event::listen(RegisterLinkTypes::class, …)` instead of the Yii
+  event `Links::EVENT_REGISTER_LINK_TYPES`; link validation uses Laravel rules (`getRules()`).
+- `getLink()` and `iconSvg` return `Illuminate\Support\HtmlString` (unescaped in Twig and Blade).
+- The **Linked from** panel is shown in the element editor's metadata (Craft 6 has no sidebar HTML
+  hook for the new editor).
+- Migration backups use Craft 6's backup service; a migration stops if the backup fails.
+- Element link targets are loaded, checked and rendered on one site: the link's target site, else
+  the site of the element holding the link (FreeLink 5 used the current site to load).
+- A draft save is checked too: a new link to an element the user (or GraphQL schema) can't view is
+  refused, and target titles and URLs aren't shown to users or schemas that can't view the target.
+- GraphQL scope checks for link targets include the schema's site scope.
+
+### Security
+- Custom attribute names are now an allowlist (the same as FreeNav's): `aria-*`, `data-*` and a few
+  plain attributes (`title`, `rel`, `id`, `lang`, `dir`, `role`, `tabindex`, `hreflang`,
+  `itemprop`…). Event handlers, URL attributes, `style`, `class` (links have their own field) and
+  front-end framework directives — Alpine `x-*`, htmx `hx-*`/`data-hx-*`, Vue `v-*`, Angular
+  `ng-*`/`data-ng-*` and Datastar's script-running `data-*` attributes — are refused on save and,
+  when already stored, skipped when a link renders and left out of MCP output. Attribute values
+  must be text. If your front end runs some other framework that executes `data-*` attributes,
+  treat everyone who can edit FreeLink fields as trusted.
+- The Links and Broken Links screens, **Linked from**, `linksTo()` in the control panel and the MCP
+  tools leave out links whose source the user can't view in the query itself, so totals and pages
+  only count what the user is shown and nothing of those links (URL, label, check result) appears.
+- The link checker requests each URL with its normalised host (lower case, no trailing dot), so the
+  pinned address always applies, and refuses any response that didn't come from the address it
+  checked (curl's primary IP), on every redirect hop.
+
+### Removed
+- Category links can't be created: Craft 6 has no categories. The upgrade turns category links whose
+  category became an entry (Craft 5's `entrify/categories` keeps element IDs) into entry links, and
+  fields that offered categories offer entries.
+- Commerce product and variant links wait for Commerce 6.
+- Migrating from Hyper, Linkit and Typed Link Field: none of them has a Craft 6 version. Migrate on
+  Craft 5 with FreeLink 5.3 before upgrading. The commands and the MCP source names remain and say
+  so.
+- The unused `LinkValidator` Yii validator and `FreeLinkRecord` ActiveRecord.
+
 ## 5.3.0 - 2026-11-19
 
 > {note} The 5.3 migration adds two tables and queues an "Indexing FreeLink links" job that builds the
