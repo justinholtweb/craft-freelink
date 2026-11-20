@@ -1,5 +1,11 @@
 # Changelog
 
+## 6.0.0-beta.2 - 2026-11-20
+
+### Changed
+
+- The changelog is now shared between the Craft 5 and Craft 6 branches, so each lists both release lines.
+
 ## 6.0.0-beta.1 - 2026-11-19
 
 > {warning} A beta for Craft CMS 6, which is itself in beta. FreeLink 6 needs FreeLink 5.3.0 to have
@@ -59,6 +65,12 @@ reverse lookups, GraphQL and MCP — with the same names, settings and permissio
   Craft 5 with FreeLink 5.3 before upgrading. The commands and the MCP source names remain and say
   so.
 - The unused `LinkValidator` Yii validator and `FreeLinkRecord` ActiveRecord.
+
+## 5.3.1 - 2026-11-20
+
+### Changed
+
+- The changelog is now shared between the Craft 5 and Craft 6 branches, so each lists both release lines.
 
 ## 5.3.0 - 2026-11-19
 
