@@ -1,6 +1,6 @@
 # Changelog
 
-## 6.0.0-beta.1 - Unreleased
+## 6.0.0-beta.1 - 2026-11-19
 
 > {warning} A beta for Craft CMS 6, which is itself in beta. FreeLink 6 needs FreeLink 5.3.0 to have
 > been installed first; see [UPGRADING.md](UPGRADING.md). Craft 5 sites stay on FreeLink 5.x.
@@ -60,10 +60,24 @@ reverse lookups, GraphQL and MCP — with the same names, settings and permissio
   so.
 - The unused `LinkValidator` Yii validator and `FreeLinkRecord` ActiveRecord.
 
-## 5.3.0 - Unreleased
+## 5.3.0 - 2026-11-19
 
 > {note} The 5.3 migration adds two tables and queues an "Indexing FreeLink links" job that builds the
 > link index from existing content. The Links screen fills in once it has run.
+
+### Security
+- **Custom attribute names are now an allowlist, the same as FreeNav 5.2.1.** Before, any name that
+  wasn't an event handler or a URL attribute was accepted, so an editor could add `style`, `class`,
+  or a front-end framework directive that runs code (`x-init`, `hx-get`, `v-html`, `ng-click`,
+  Datastar's `data-on-click`…), or an array value that Craft expands into further attributes. Now
+  only `data-*` (except attributes frameworks run as code, such as `data-hx-*`, `data-ng-*`,
+  `data-on-*`, `data-bind`, `data-text` and `data-show`), `aria-*` and plain attributes such as
+  `title`, `rel`, `id`, `lang`, `role`, `hreflang` and `itemprop` are allowed, and values must be
+  text. Anything else is refused when a link is saved (CP, GraphQL, MCP), dropped by the Hyper
+  migration, and skipped when a link renders or is returned by MCP — which also covers links saved
+  before this release. An entry holding such an attribute shows a validation error naming it until
+  it's removed. On a site whose front end runs a framework that executes other `data-*` attributes,
+  treat editors as trusted.
 
 ### Added
 - A **FreeLink** section in the control panel, with a sidebar item whose label and icon can be
@@ -71,7 +85,9 @@ reverse lookups, GraphQL and MCP — with the same names, settings and permissio
   be one `<svg>` element and sanitised every time it is drawn).
 - A **Links** screen listing every FreeLink link on the site, filterable by link type, field, site,
   source element type, section, target domain and status, 50 per page. **Broken Links** shows only
-  the problems.
+  the problems. Links whose source element a user can't view are left out entirely — rows, totals
+  and pages — here, in the **Linked from** panel, in `craft.freelink.linksTo()` in the control panel,
+  and in the MCP tools.
 - Reverse lookups: "what links to this?" on the Links screen, a **Linked from** panel on element
   edit screens, `Plugin::getInstance()->links->findLinksTo($element)`, and
   `craft.freelink.linksTo(element)` / `craft.freelink.linkCountTo(element)` in Twig.
@@ -80,7 +96,8 @@ reverse lookups, GraphQL and MCP — with the same names, settings and permissio
   links now**) or `php craft freelink/links/check`, with strict SSRF protection: http/https only,
   private, loopback, link-local, reserved, multicast and cloud-metadata addresses refused (IPv4 and
   IPv6, including IPv4-mapped and decimal/octal/hex forms), connections pinned to the checked
-  address, every redirect hop re-checked (5 at most), 5-second timeouts and a 64 KB cap. Checks can
+  address (the request uses the same normalised host name as the pin, and a response from any other
+  address is refused), every redirect hop re-checked (5 at most), 5-second timeouts and a 64 KB cap. Checks can
   be turned off in the settings. Only URLs saved in FreeLink fields are ever requested.
 - New permissions: **View the Links screen and link status** and **Queue link checks**.
 - An optional icon per link (field settings **Allow icons** and **Include Font Awesome Pro icons**),
@@ -107,8 +124,21 @@ reverse lookups, GraphQL and MCP — with the same names, settings and permissio
   off, a condition added) or when the editor can't view its target. Editing its label or other
   attributes doesn't count as a change. Links in drafts are always checked when the draft is
   published. A link whose target was deleted becomes empty.
+- Drafts (and any save that skips validation) still get the security check: a new or changed element
+  link must point at an element the person or GraphQL schema saving can view. Min/max, required and
+  selection conditions stay checks for live saves only.
+- The field input, GraphQL (`url`, `text`) and MCP output no longer show the title or URL of a linked
+  element the current user or schema can't view. GraphQL checks the site too: a link to an element's
+  copy on a site the schema can't read is hidden (and refused in a mutation), even if the element
+  exists on a site it can. The field input keeps the link as it is, labelled
+  "An element you can't view", so saving doesn't drop it.
 
 ### Fixed
+- An element link without a target site now resolves its element on the site of the entry (or other
+  element) it belongs to, not on the current site. Templates that render an element from its own
+  site — nearly always — see no change. A template showing an element loaded from another site
+  (`craft.entries.site('fr')`) now gets that site's copy of the linked element, where before it got
+  the current site's copy.
 - Setting an element link's `targetId` in PHP, GraphQL, Feed Me or MCP on an existing element no
   longer gets replaced by the target stored before. Only a value loaded from the database reads its
   targets from the relations table now.
